@@ -1,98 +1,93 @@
 import 'package:flutter/material.dart';
-import '../../services/auth_service.dart';
+import '../../services/supabase_service.dart';
+import '../../services/app_theme.dart';
 
 class DriverRoutesScreen extends StatelessWidget {
-  final AuthService authService;
-  const DriverRoutesScreen({super.key, required this.authService});
+  final SupabaseService supabaseService;
+  final String? driverId;
+  const DriverRoutesScreen({
+    super.key,
+    required this.supabaseService,
+    this.driverId,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final user = authService.currentUser!;
-    final routes = authService.carRoutes
-        .where((r) => r.driverId == user.id)
-        .toList();
-    final allRoutes = authService.carRoutes;
-
     return Container(
-      color: const Color(0xFFF5F5F5),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // My Routes section
-            Row(
-              children: [
-                const Icon(Icons.route, color: Color(0xFF1A237E), size: 22),
-                const SizedBox(width: 8),
-                Text(
-                  'My Routes (${routes.length})',
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A237E),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            if (routes.isEmpty)
-              _emptyState('No routes assigned')
-            else
-              ...routes.map(
-                (r) => _routeCard(
-                  r.routeName,
-                  r.from,
-                  r.to,
-                  r.distanceKm,
-                  r.estimatedTime,
-                  true,
-                ),
-              ),
+      color: AppTheme.background,
+      child: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: supabaseService.tableStream('car_routes'),
+        builder: (context, snap) {
+          final allRoutes = snap.data ?? [];
+          final myRoutes = driverId != null
+              ? allRoutes.where((r) => r['driver_id'] == driverId).toList()
+              : [];
+          final otherRoutes = allRoutes
+              .where((r) => r['driver_id'] != driverId)
+              .toList();
 
-            const SizedBox(height: 28),
-            // All routes
-            Row(
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.map_outlined, color: Colors.grey, size: 22),
-                const SizedBox(width: 8),
-                Text(
-                  'All Routes (${allRoutes.length})',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[700],
-                  ),
+                // My Routes
+                Row(
+                  children: [
+                    const Icon(Icons.route, color: AppTheme.primary, size: 22),
+                    const SizedBox(width: 8),
+                    Text(
+                      'My Routes (${myRoutes.length})',
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primary,
+                      ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 14),
+                if (myRoutes.isEmpty)
+                  _emptyState('No routes assigned')
+                else
+                  ...myRoutes.map((r) => _routeCard(r, true)),
+
+                const SizedBox(height: 28),
+                // All routes
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.map_outlined,
+                      color: AppTheme.textSecondary,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'All Routes (${otherRoutes.length})',
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                ...otherRoutes.map((r) => _routeCard(r, false)),
               ],
             ),
-            const SizedBox(height: 14),
-            ...allRoutes
-                .where((r) => r.driverId != user.id)
-                .map(
-                  (r) => _routeCard(
-                    r.routeName,
-                    r.from,
-                    r.to,
-                    r.distanceKm,
-                    r.estimatedTime,
-                    false,
-                  ),
-                ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
-  Widget _routeCard(
-    String name,
-    String from,
-    String to,
-    double distance,
-    double time,
-    bool isMine,
-  ) {
+  Widget _routeCard(Map<String, dynamic> r, bool isMine) {
+    final distance = double.tryParse(r['distance_km']?.toString() ?? '0') ?? 0;
+    final time = double.tryParse(r['estimated_time']?.toString() ?? '0') ?? 0;
+    final name =
+        r['route_name']?.toString() ?? '${r['from'] ?? ''} - ${r['to'] ?? ''}';
+
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -104,13 +99,13 @@ class DriverRoutesScreen extends StatelessWidget {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: isMine
-                    ? const Color(0xFF1A237E).withOpacity(0.1)
-                    : Colors.grey.withOpacity(0.1),
+                    ? AppTheme.primary.withValues(alpha: 0.1)
+                    : AppTheme.textHint.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
                 Icons.route,
-                color: isMine ? const Color(0xFF1A237E) : Colors.grey,
+                color: isMine ? AppTheme.primary : AppTheme.textHint,
                 size: 22,
               ),
             ),
@@ -124,9 +119,7 @@ class DriverRoutesScreen extends StatelessWidget {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
-                      color: isMine
-                          ? const Color(0xFF1A237E)
-                          : Colors.grey[800],
+                      color: isMine ? AppTheme.primary : AppTheme.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -135,23 +128,29 @@ class DriverRoutesScreen extends StatelessWidget {
                       Icon(
                         Icons.location_on_outlined,
                         size: 14,
-                        color: Colors.green[700],
+                        color: AppTheme.success,
                       ),
-                      Text(' $from', style: const TextStyle(fontSize: 11)),
+                      Text(
+                        ' ${r['from'] ?? ''}',
+                        style: const TextStyle(fontSize: 11),
+                      ),
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 6),
                         child: Icon(
                           Icons.arrow_forward,
                           size: 12,
-                          color: Colors.grey,
+                          color: AppTheme.textHint,
                         ),
                       ),
                       Icon(
                         Icons.flag_outlined,
                         size: 14,
-                        color: Colors.red[700],
+                        color: AppTheme.error,
                       ),
-                      Text(' $to', style: const TextStyle(fontSize: 11)),
+                      Text(
+                        ' ${r['to'] ?? ''}',
+                        style: const TextStyle(fontSize: 11),
+                      ),
                     ],
                   ),
                 ],
@@ -169,7 +168,7 @@ class DriverRoutesScreen extends StatelessWidget {
                 ),
                 Text(
                   '${time.toStringAsFixed(1)} hrs',
-                  style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                  style: TextStyle(color: AppTheme.textHint, fontSize: 11),
                 ),
               ],
             ),
@@ -184,15 +183,15 @@ class DriverRoutesScreen extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: AppTheme.divider),
       ),
       child: Column(
         children: [
-          Icon(Icons.route, size: 40, color: Colors.grey[400]),
+          Icon(Icons.route, size: 40, color: AppTheme.textHint),
           const SizedBox(height: 8),
-          Text(msg, style: TextStyle(color: Colors.grey[500])),
+          Text(msg, style: TextStyle(color: AppTheme.textHint)),
         ],
       ),
     );

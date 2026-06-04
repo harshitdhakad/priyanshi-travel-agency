@@ -324,7 +324,9 @@ ALTER TABLE profiles DISABLE ROW LEVEL SECURITY;
 ALTER TABLE vehicles DISABLE ROW LEVEL SECURITY;
 ALTER TABLE fleet_logbooks DISABLE ROW LEVEL SECURITY;
 ALTER TABLE diesel_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE diesel_purchases DISABLE ROW LEVEL SECURITY;
 ALTER TABLE salary_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE salary_payments DISABLE ROW LEVEL SECURITY;
 ALTER TABLE bookings DISABLE ROW LEVEL SECURITY;
 ALTER TABLE vehicle_events DISABLE ROW LEVEL SECURITY;
 ALTER TABLE car_routes DISABLE ROW LEVEL SECURITY;
@@ -335,7 +337,6 @@ ALTER TABLE servicing_records DISABLE ROW LEVEL SECURITY;
 ALTER TABLE govt_offices DISABLE ROW LEVEL SECURITY;
 ALTER TABLE booking_trips DISABLE ROW LEVEL SECURITY;
 ALTER TABLE salary_advances DISABLE ROW LEVEL SECURITY;
-ALTER TABLE offices DISABLE ROW LEVEL SECURITY;
 ALTER TABLE office_vehicle_assignments DISABLE ROW LEVEL SECURITY;
 ALTER TABLE events DISABLE ROW LEVEL SECURITY;
 ALTER TABLE vehicle_holidays DISABLE ROW LEVEL SECURITY;
@@ -1318,6 +1319,34 @@ ALTER TABLE vehicle_holidays DISABLE ROW LEVEL SECURITY;
   Future<void> removeVehicleHoliday(String id) async {
     await client.from('vehicle_holidays').delete().eq('id', id);
     notifyListeners();
+  }
+
+  // ══════════════════════════════════════
+  //  DRIVER-SPECIFIC STREAMS
+  // ══════════════════════════════════════
+
+  Stream<List<Map<String, dynamic>>> driverBookingsStream(String driverId) {
+    return client
+        .from('bookings')
+        .stream(primaryKey: ['id'])
+        .map(
+          (events) => events
+              .map((e) => Map<String, dynamic>.from(e))
+              .where((b) => b['driver_id'] == driverId)
+              .toList(),
+        );
+  }
+
+  Stream<List<Map<String, dynamic>>> driverAssignmentsStream(String driverId) {
+    return client
+        .from('office_vehicle_assignments')
+        .stream(primaryKey: ['id'])
+        .map(
+          (events) => events
+              .map((e) => Map<String, dynamic>.from(e))
+              .where((a) => a['driver_id'] == driverId)
+              .toList(),
+        );
   }
 
   // ══════════════════════════════════════

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
+import '../../services/app_theme.dart';
 
 class DriverMyDetailsScreen extends StatelessWidget {
   final AuthService authService;
@@ -169,43 +170,7 @@ class DriverMyDetailsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
 
-            // Quick stats
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'My Statistics',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1A237E),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                _statCard(
-                  '${authService.dieselRecords.where((d) => d.driverId == user.id).length}',
-                  'Diesel Records',
-                  Icons.local_gas_station,
-                  const Color(0xFFE65100),
-                ),
-                const SizedBox(width: 12),
-                _statCard(
-                  '${authService.bookings.where((b) => b.driverId == user.id).length}',
-                  'Bookings',
-                  Icons.book_online,
-                  Colors.green,
-                ),
-                const SizedBox(width: 12),
-                _statCard(
-                  '${authService.carRoutes.where((r) => r.driverId == user.id).length}',
-                  'Routes',
-                  Icons.route,
-                  const Color(0xFF1A237E),
-                ),
-              ],
-            ),
+            // Quick stats removed - use Supabase streams
             const SizedBox(height: 20),
           ],
         ),
@@ -218,7 +183,7 @@ class DriverMyDetailsScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xFF1A237E), size: 20),
+          Icon(icon, color: AppTheme.primary, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -226,7 +191,7 @@ class DriverMyDetailsScreen extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                  style: TextStyle(color: AppTheme.textHint, fontSize: 11),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -240,39 +205,6 @@ class DriverMyDetailsScreen extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _statCard(String value, String label, IconData icon, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: Colors.white, size: 22),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            Text(
-              label,
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.8),
-                fontSize: 10,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

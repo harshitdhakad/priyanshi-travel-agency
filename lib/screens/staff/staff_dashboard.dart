@@ -79,7 +79,7 @@ class _StaffDashboardState extends State<StaffDashboard> {
       case 1:
         return SalaryManagementScreen(supabaseService: widget.supabaseService);
       case 2:
-        return DieselDetailsScreen(authService: widget.authService);
+        return DieselDetailsScreen(supabaseService: widget.supabaseService);
       case 3:
         return DriverAnalysisScreen(
           authService: widget.authService,
@@ -88,7 +88,7 @@ class _StaffDashboardState extends State<StaffDashboard> {
       case 4:
         return VehicleAnalysisScreen(supabaseService: widget.supabaseService);
       case 5:
-        return VehicleEventsScreen(authService: widget.authService);
+        return VehicleEventsScreen(supabaseService: widget.supabaseService);
       case 6:
         return new_booking.BookingOfficesScreen(
           supabaseService: widget.supabaseService,
@@ -256,10 +256,6 @@ class _StaffDashboardState extends State<StaffDashboard> {
   }
 
   Widget _buildStaffHome() {
-    final vehicles = widget.authService.vehicles;
-    final drivers = widget.authService.drivers;
-    final bookings = widget.authService.bookings;
-
     return Container(
       color: AppTheme.background,
       child: SingleChildScrollView(
@@ -283,40 +279,66 @@ class _StaffDashboardState extends State<StaffDashboard> {
               style: TextStyle(color: Colors.grey[600]),
             ),
             const SizedBox(height: 24),
-            Row(
-              children: [
-                _statCard(
-                  _loc.t('total_drivers'),
-                  '${drivers.length}',
-                  Icons.drive_eta,
-                  AppTheme.primary,
-                ),
-                const SizedBox(width: 12),
-                _statCard(
-                  _loc.t('total_vehicles'),
-                  '${vehicles.length}',
-                  Icons.directions_car,
-                  AppTheme.secondary,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                _statCard(
-                  _loc.t('bookings'),
-                  '${bookings.length}',
-                  Icons.book_online,
-                  AppTheme.success,
-                ),
-                const SizedBox(width: 12),
-                _statCard(
-                  _loc.t('active_vehicles'),
-                  '${vehicles.where((v) => v.status == 'active').length}',
-                  Icons.check_circle_outline,
-                  AppTheme.success,
-                ),
-              ],
+            StreamBuilder<List<Map<String, dynamic>>>(
+              stream: widget.supabaseService.profileStream('driver'),
+              builder: (ctx, dSnap) {
+                return StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: widget.supabaseService.vehicleStream(),
+                  builder: (ctx, vSnap) {
+                    return StreamBuilder<List<Map<String, dynamic>>>(
+                      stream: widget.supabaseService.tableStream('bookings'),
+                      builder: (ctx, bSnap) {
+                        final drivers = dSnap.data ?? [];
+                        final vehicles = vSnap.data ?? [];
+                        final bookings = bSnap.data ?? [];
+                        final activeVehicles = vehicles
+                            .where((v) => v['status'] == 'active')
+                            .length;
+
+                        return Column(
+                          children: [
+                            Row(
+                              children: [
+                                _statCard(
+                                  _loc.t('total_drivers'),
+                                  '${drivers.length}',
+                                  Icons.drive_eta,
+                                  AppTheme.primary,
+                                ),
+                                const SizedBox(width: 12),
+                                _statCard(
+                                  _loc.t('total_vehicles'),
+                                  '${vehicles.length}',
+                                  Icons.directions_car,
+                                  AppTheme.secondary,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                _statCard(
+                                  _loc.t('bookings'),
+                                  '${bookings.length}',
+                                  Icons.book_online,
+                                  AppTheme.success,
+                                ),
+                                const SizedBox(width: 12),
+                                _statCard(
+                                  _loc.t('active_vehicles'),
+                                  '$activeVehicles',
+                                  Icons.check_circle_outline,
+                                  AppTheme.success,
+                                ),
+                              ],
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                );
+              },
             ),
             const SizedBox(height: 28),
             Text(

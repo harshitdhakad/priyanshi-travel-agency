@@ -82,7 +82,7 @@ class _DirectorDashboardState extends State<DirectorDashboard> {
       case 1:
         return SalaryManagementScreen(supabaseService: widget.supabaseService);
       case 2:
-        return DieselDetailsScreen(authService: widget.authService);
+        return DieselDetailsScreen(supabaseService: widget.supabaseService);
       case 3:
         return DriverAnalysisScreen(
           authService: widget.authService,
@@ -91,7 +91,7 @@ class _DirectorDashboardState extends State<DirectorDashboard> {
       case 4:
         return VehicleAnalysisScreen(supabaseService: widget.supabaseService);
       case 5:
-        return VehicleEventsScreen(authService: widget.authService);
+        return VehicleEventsScreen(supabaseService: widget.supabaseService);
       case 6:
         return new_booking.BookingOfficesScreen(
           supabaseService: widget.supabaseService,
@@ -263,11 +263,6 @@ class _DirectorDashboardState extends State<DirectorDashboard> {
   }
 
   Widget _buildHomeDashboard() {
-    final drivers = widget.authService.drivers;
-    final vehicles = widget.authService.vehicles;
-    final bookings = widget.authService.bookings;
-    final activeVehicles = vehicles.where((v) => v.status == 'active').length;
-
     return Container(
       color: AppTheme.background,
       child: SingleChildScrollView(
@@ -292,41 +287,67 @@ class _DirectorDashboardState extends State<DirectorDashboard> {
             ),
             const SizedBox(height: 24),
 
-            // Stat cards row
-            Row(
-              children: [
-                _statCard(
-                  _loc.t('total_drivers'),
-                  '${drivers.length}',
-                  Icons.drive_eta,
-                  AppTheme.primary,
-                ),
-                const SizedBox(width: 12),
-                _statCard(
-                  _loc.t('total_vehicles'),
-                  '${vehicles.length}',
-                  Icons.directions_car,
-                  AppTheme.secondary,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                _statCard(
-                  _loc.t('active_vehicles'),
-                  '$activeVehicles',
-                  Icons.check_circle_outline,
-                  AppTheme.success,
-                ),
-                const SizedBox(width: 12),
-                _statCard(
-                  _loc.t('bookings'),
-                  '${bookings.length}',
-                  Icons.book_online,
-                  AppTheme.warning,
-                ),
-              ],
+            // Live stat cards from Supabase
+            StreamBuilder<List<Map<String, dynamic>>>(
+              stream: widget.supabaseService.profileStream('driver'),
+              builder: (ctx, dSnap) {
+                return StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: widget.supabaseService.vehicleStream(),
+                  builder: (ctx, vSnap) {
+                    return StreamBuilder<List<Map<String, dynamic>>>(
+                      stream: widget.supabaseService.tableStream('bookings'),
+                      builder: (ctx, bSnap) {
+                        final drivers = dSnap.data ?? [];
+                        final vehicles = vSnap.data ?? [];
+                        final bookings = bSnap.data ?? [];
+                        final activeVehicles = vehicles
+                            .where((v) => v['status'] == 'active')
+                            .length;
+
+                        return Column(
+                          children: [
+                            Row(
+                              children: [
+                                _statCard(
+                                  _loc.t('total_drivers'),
+                                  '${drivers.length}',
+                                  Icons.drive_eta,
+                                  AppTheme.primary,
+                                ),
+                                const SizedBox(width: 12),
+                                _statCard(
+                                  _loc.t('total_vehicles'),
+                                  '${vehicles.length}',
+                                  Icons.directions_car,
+                                  AppTheme.secondary,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                _statCard(
+                                  _loc.t('active_vehicles'),
+                                  '$activeVehicles',
+                                  Icons.check_circle_outline,
+                                  AppTheme.success,
+                                ),
+                                const SizedBox(width: 12),
+                                _statCard(
+                                  _loc.t('bookings'),
+                                  '${bookings.length}',
+                                  Icons.book_online,
+                                  AppTheme.warning,
+                                ),
+                              ],
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                );
+              },
             ),
             const SizedBox(height: 28),
 
@@ -378,7 +399,7 @@ class _DirectorDashboardState extends State<DirectorDashboard> {
             ),
             const SizedBox(height: 28),
 
-            // Recent bookings
+            // Recent bookings from Supabase
             Text(
               _loc.locale == 'hi' ? 'हाल की बुकिंग' : 'Recent Bookings',
               style: const TextStyle(
@@ -388,44 +409,76 @@ class _DirectorDashboardState extends State<DirectorDashboard> {
               ),
             ),
             const SizedBox(height: 14),
-            ...bookings
-                .take(3)
-                .map(
-                  (b) => Card(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    shape: RoundedRectangleBorder(
+            StreamBuilder<List<Map<String, dynamic>>>(
+              stream: widget.supabaseService.tableStream('bookings'),
+              builder: (ctx, snap) {
+                final bookings = snap.data ?? [];
+                if (bookings.isEmpty) {
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surface,
                       borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.divider),
                     ),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: _statusColor(b.status),
-                        child: Icon(
-                          _statusIcon(b.status),
-                          color: Colors.white,
-                          size: 20,
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.book_online_outlined,
+                          size: 40,
+                          color: AppTheme.textHint,
                         ),
-                      ),
-                      title: Text(
-                        b.customerName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
+                        const SizedBox(height: 8),
+                        Text(
+                          'No bookings yet',
+                          style: TextStyle(color: AppTheme.textHint),
                         ),
-                      ),
-                      subtitle: Text(
-                        '${b.pickupLocation} → ${b.dropLocation}',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      trailing: Text(
-                        '₹${b.amount.toStringAsFixed(0)}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primary,
-                        ),
-                      ),
+                      ],
                     ),
-                  ),
-                ),
+                  );
+                }
+                return Column(
+                  children: bookings.take(3).map((b) {
+                    final status = b['status']?.toString() ?? 'pending';
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: _statusColor(status),
+                          child: Icon(
+                            _statusIcon(status),
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                        title: Text(
+                          b['customer_name']?.toString() ?? 'Unknown',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                        subtitle: Text(
+                          '${b['pickup_location'] ?? ''} → ${b['drop_location'] ?? ''}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        trailing: Text(
+                          '₹${(double.tryParse(b['amount']?.toString() ?? '0') ?? 0).toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
           ],
         ),
       ),

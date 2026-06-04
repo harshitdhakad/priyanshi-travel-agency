@@ -1,170 +1,178 @@
 import 'package:flutter/material.dart';
-import '../../services/auth_service.dart';
+import '../../services/supabase_service.dart';
+import '../../services/app_theme.dart';
 
 class VehicleEventsScreen extends StatelessWidget {
-  final AuthService authService;
-  const VehicleEventsScreen({super.key, required this.authService});
+  final SupabaseService supabaseService;
+  const VehicleEventsScreen({super.key, required this.supabaseService});
 
   @override
   Widget build(BuildContext context) {
-    final events = authService.vehicleEvents;
-
     return Container(
-      color: const Color(0xFFF5F5F5),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      color: AppTheme.background,
+      child: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: supabaseService.eventsStream(),
+        builder: (context, snap) {
+          final events = snap.data ?? [];
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Vehicle Events',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A237E),
-                  ),
-                ),
-                ElevatedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add Event'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1A237E),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            ...events.map(
-              (e) => Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: _eventColor(e.eventType).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(
-                          _eventIcon(e.eventType),
-                          color: _eventColor(e.eventType),
-                          size: 24,
-                        ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Vehicle Events',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primary,
                       ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
+                    ),
+                    Text(
+                      '${events.length} events',
+                      style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (events.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.divider),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.event_busy,
+                          size: 40,
+                          color: AppTheme.textHint,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'No vehicle events',
+                          style: TextStyle(color: AppTheme.textHint),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  ...events.map((e) {
+                    final eventType = e['event_type']?.toString() ?? 'Other';
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Text(
-                                  e.eventType,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _eventColor(
-                                      e.eventType,
-                                    ).withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    e.vehicleNumber,
-                                    style: TextStyle(
-                                      color: _eventColor(e.eventType),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              e.description,
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 13,
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: _eventColor(
+                                  eventType,
+                                ).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                _eventIcon(eventType),
+                                color: _eventColor(eventType),
+                                size: 24,
                               ),
                             ),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.calendar_today,
-                                  size: 12,
-                                  color: Colors.grey[500],
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Done: ${e.eventDate.day}/${e.eventDate.month}/${e.eventDate.year}',
-                                  style: TextStyle(
-                                    color: Colors.grey[500],
-                                    fontSize: 11,
-                                  ),
-                                ),
-                                if (e.nextDueDate != null) ...[
-                                  const SizedBox(width: 12),
-                                  Icon(
-                                    Icons.event_busy,
-                                    size: 12,
-                                    color: Colors.orange[700],
-                                  ),
-                                  const SizedBox(width: 4),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
                                   Text(
-                                    'Next: ${e.nextDueDate!.day}/${e.nextDueDate!.month}/${e.nextDueDate!.year}',
+                                    eventType,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    e['description']?.toString() ?? '',
                                     style: TextStyle(
-                                      color: Colors.orange[700],
+                                      color: Colors.grey[600],
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Vehicle: ${e['vehicle_number'] ?? 'N/A'}',
+                                    style: TextStyle(
+                                      color: Colors.grey[500],
                                       fontSize: 11,
                                     ),
                                   ),
+                                  if (e['event_date'] != null) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Date: ${e['event_date']}',
+                                      style: TextStyle(
+                                        color: Colors.grey[500],
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                  if (e['next_due_date'] != null) ...[
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.event_busy,
+                                          size: 12,
+                                          color: Colors.orange[700],
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Next: ${e['next_due_date']}',
+                                          style: TextStyle(
+                                            color: Colors.orange[700],
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                  if (e['cost'] != null) ...[
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'Cost: ₹${(double.tryParse(e['cost'].toString()) ?? 0).toStringAsFixed(0)}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: AppTheme.primary,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
                                 ],
-                              ],
-                            ),
-                            if (e.cost != null) ...[
-                              const SizedBox(height: 6),
-                              Text(
-                                'Cost: ₹${e.cost!.toStringAsFixed(0)}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF1A237E),
-                                  fontSize: 13,
-                                ),
                               ),
-                            ],
+                            ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
+                    );
+                  }),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -172,15 +180,15 @@ class VehicleEventsScreen extends StatelessWidget {
   Color _eventColor(String type) {
     switch (type.toLowerCase()) {
       case 'service':
-        return const Color(0xFF1A237E);
+        return AppTheme.primary;
       case 'insurance':
-        return Colors.green;
+        return AppTheme.success;
       case 'pucc':
-        return const Color(0xFFE65100);
+        return AppTheme.warning;
       case 'fitness':
-        return Colors.purple;
+        return AppTheme.accent;
       default:
-        return Colors.blue;
+        return AppTheme.secondary;
     }
   }
 

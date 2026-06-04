@@ -23,32 +23,47 @@ class _DriverLogbookScreenState extends State<DriverLogbookScreen> {
   final vehicleCtrl = TextEditingController();
   final fuelCtrl = TextEditingController();
   final tollCtrl = TextEditingController();
+  final startKmCtrl = TextEditingController();
+  final endKmCtrl = TextEditingController();
   final dateCtrl = TextEditingController(
     text: DateFormat('yyyy-MM-dd').format(DateTime.now()),
   );
-  final List<Map<String, TextEditingController>> _routeStops = [];
+  final List<TextEditingController> _cityStops = [];
   final List<Map<String, TextEditingController>> _dynamicFields = [];
   bool _saving = false;
   bool _notWentAnywhere = false;
   final AppLocalizations _loc = AppLocalizations();
 
-  void _addRouteStop() {
+  @override
+  void initState() {
+    super.initState();
+    _autoFillVehicle();
+  }
+
+  Future<void> _autoFillVehicle() async {
+    if (widget.driverId == null) return;
+    try {
+      final vehicles = await widget.supabaseService.getVehicles();
+      if (!mounted) return;
+      final match = vehicles.where(
+        (v) => v['assigned_driver_id'] == widget.driverId,
+      );
+      if (match.isNotEmpty && vehicleCtrl.text.isEmpty) {
+        vehicleCtrl.text = match.first['number_plate']?.toString() ?? '';
+      }
+    } catch (_) {}
+  }
+
+  void _addCityStop() {
     setState(() {
-      _routeStops.add({
-        'source': TextEditingController(),
-        'destination': TextEditingController(),
-        'startKm': TextEditingController(),
-        'endKm': TextEditingController(),
-      });
+      _cityStops.add(TextEditingController());
     });
   }
 
-  void _removeRouteStop(int idx) {
+  void _removeCityStop(int idx) {
     setState(() {
-      for (final ctrl in _routeStops[idx].values) {
-        ctrl.dispose();
-      }
-      _routeStops.removeAt(idx);
+      _cityStops[idx].dispose();
+      _cityStops.removeAt(idx);
     });
   }
 
@@ -65,23 +80,22 @@ class _DriverLogbookScreenState extends State<DriverLogbookScreen> {
     setState(() => _dynamicFields.removeAt(idx));
   }
 
-  double _calculateTotalKm() {
-    double total = 0;
-    for (final stop in _routeStops) {
-      final start = double.tryParse(stop['startKm']!.text) ?? 0;
-      final end = double.tryParse(stop['endKm']!.text) ?? 0;
-      total += (end - start).abs();
-    }
-    return total;
+  String _buildRouteString() {
+    final cities = _cityStops
+        .where((c) => c.text.trim().isNotEmpty)
+        .map((c) => c.text.trim())
+        .toList();
+    return cities.join(' → ');
   }
 
   Future<void> _saveLogbook(String status) async {
     if (!_formKey.currentState!.validate()) return;
-    if (!_notWentAnywhere && _routeStops.isEmpty) {
+    if (!_notWentAnywhere &&
+        _cityStops.where((c) => c.text.trim().isNotEmpty).isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Add at least one route stop or mark "Didn\'t go anywhere"',
+            'Add at least one city stop or mark "Didn\'t go anywhere"',
           ),
           backgroundColor: AppTheme.error,
         ),
@@ -97,29 +111,27 @@ class _DriverLogbookScreenState extends State<DriverLogbookScreen> {
         if (key.isNotEmpty && val.isNotEmpty) metadata[key] = val;
       }
 
-      // Build route stops list
-      final stops = _routeStops
-          .map(
-            (s) => {
-              'source': s['source']!.text.trim(),
-              'destination': s['destination']!.text.trim(),
-              'start_km': double.tryParse(s['startKm']!.text) ?? 0,
-              'end_km': double.tryParse(s['endKm']!.text) ?? 0,
-            },
-          )
+      // Build route stops from city names
+      final cities = _cityStops
+          .where((c) => c.text.trim().isNotEmpty)
+          .map((c) => c.text.trim())
           .toList();
 
-      // Derive main source/dest from first/last stops
-      String mainSource = '';
-      String mainDest = '';
-      double mainStart = 0;
-      double mainEnd = 0;
-      if (stops.isNotEmpty) {
-        mainSource = stops.first['source'] as String;
-        mainDest = stops.last['destination'] as String;
-        mainStart = stops.first['start_km'] as double;
-        mainEnd = stops.last['end_km'] as double;
+      final stops = <Map<String, dynamic>>[];
+      for (int i = 0; i < cities.length; i++) {
+        stops.add({
+          'source': i == 0 ? cities[0] : cities[i - 1],
+          'destination': cities[i],
+          'start_km': 0,
+          'end_km': 0,
+        });
       }
+
+      final _ = cities.join(' → '); // route display string (future use)
+      String mainSource = cities.isNotEmpty ? cities.first : '';
+      String mainDest = cities.isNotEmpty ? cities.last : '';
+      double mainStart = double.tryParse(startKmCtrl.text) ?? 0;
+      double mainEnd = double.tryParse(endKmCtrl.text) ?? 0;
 
       if (_notWentAnywhere) {
         mainSource = 'Station';
@@ -196,18 +208,7 @@ class _DriverLogbookScreenState extends State<DriverLogbookScreen> {
     if (confirm == true) {
       setState(() => _notWentAnywhere = true);
       if (vehicleCtrl.text.isEmpty) {
-        // Try to get vehicle from driver
-        try {
-          final vehicles = await widget.supabaseService.getVehicles();
-          if (vehicles.isNotEmpty && widget.driverId != null) {
-            final match = vehicles.where(
-              (v) => v['assigned_driver_id'] == widget.driverId,
-            );
-            if (match.isNotEmpty) {
-              vehicleCtrl.text = match.first['number_plate'] ?? '';
-            }
-          }
-        } catch (_) {}
+        await _autoFillVehicle();
       }
       await _saveLogbook('submitted');
     }
@@ -217,12 +218,12 @@ class _DriverLogbookScreenState extends State<DriverLogbookScreen> {
     vehicleCtrl.clear();
     fuelCtrl.clear();
     tollCtrl.clear();
-    for (final stop in _routeStops) {
-      for (final ctrl in stop.values) {
-        ctrl.dispose();
-      }
+    startKmCtrl.clear();
+    endKmCtrl.clear();
+    for (final c in _cityStops) {
+      c.dispose();
     }
-    _routeStops.clear();
+    _cityStops.clear();
     for (final field in _dynamicFields) {
       field['key']?.dispose();
       field['value']?.dispose();
@@ -270,6 +271,7 @@ class _DriverLogbookScreenState extends State<DriverLogbookScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
+                    // Basic info card
                     Card(
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
@@ -335,18 +337,92 @@ class _DriverLogbookScreenState extends State<DriverLogbookScreen> {
                                 ),
                               ],
                             ),
+                            const SizedBox(height: 12),
+                            // Day-level KM fields
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: AppTheme.primary.withValues(
+                                    alpha: 0.2,
+                                  ),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Odometer Reading (Day)',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppTheme.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextFormField(
+                                          controller: startKmCtrl,
+                                          decoration: InputDecoration(
+                                            labelText: 'Start KM',
+                                            border: const OutlineInputBorder(),
+                                            prefixIcon: const Icon(
+                                              Icons.play_arrow,
+                                              size: 18,
+                                            ),
+                                          ),
+                                          keyboardType: TextInputType.number,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: TextFormField(
+                                          controller: endKmCtrl,
+                                          decoration: InputDecoration(
+                                            labelText: 'End KM',
+                                            border: const OutlineInputBorder(),
+                                            prefixIcon: const Icon(
+                                              Icons.stop,
+                                              size: 18,
+                                            ),
+                                          ),
+                                          keyboardType: TextInputType.number,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (startKmCtrl.text.isNotEmpty &&
+                                      endKmCtrl.text.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 6),
+                                      child: Text(
+                                        'Total: ${((double.tryParse(endKmCtrl.text) ?? 0) - (double.tryParse(startKmCtrl.text) ?? 0)).abs().toStringAsFixed(0)} KM',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppTheme.success,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
                     ),
                     const SizedBox(height: 20),
 
-                    // Route Stops section
+                    // Route Stops section - simplified city names
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          _loc.t('route_stops'),
+                          'Route (Cities)',
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
@@ -354,146 +430,94 @@ class _DriverLogbookScreenState extends State<DriverLogbookScreen> {
                           ),
                         ),
                         TextButton.icon(
-                          onPressed: _addRouteStop,
+                          onPressed: _addCityStop,
                           icon: const Icon(Icons.add_location, size: 16),
-                          label: Text(_loc.t('add_stop')),
+                          label: const Text('Add City'),
                           style: TextButton.styleFrom(
                             foregroundColor: AppTheme.primary,
                           ),
                         ),
                       ],
                     ),
-                    if (_routeStops.isNotEmpty)
-                      Text(
-                        'Total: ${_calculateTotalKm().toStringAsFixed(0)} KM',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.success,
+                    if (_cityStops.isNotEmpty && _buildRouteString().isNotEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.success.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: AppTheme.success.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.route,
+                              color: AppTheme.success,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                _buildRouteString(),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.success,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    const SizedBox(height: 8),
-                    ..._routeStops.asMap().entries.map((entry) {
+                    ..._cityStops.asMap().entries.map((entry) {
                       final idx = entry.key;
-                      final stop = entry.value;
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        color: AppTheme.secondary.withValues(alpha: 0.03),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 24,
-                                    height: 24,
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.primary,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Text(
-                                      '${idx + 1}',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Stop ${idx + 1}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.close,
-                                      size: 16,
-                                      color: AppTheme.error,
-                                    ),
-                                    onPressed: () => _removeRouteStop(idx),
-                                  ),
-                                ],
+                      final ctrl = entry.value;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 28,
+                              height: 28,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary,
+                                shape: BoxShape.circle,
                               ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: TextField(
-                                      controller: stop['source'],
-                                      decoration: InputDecoration(
-                                        labelText: _loc.t('source'),
-                                        border: const OutlineInputBorder(),
-                                        isDense: true,
-                                      ),
-                                      style: const TextStyle(fontSize: 13),
-                                    ),
-                                  ),
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                    ),
-                                    child: Icon(
-                                      Icons.arrow_forward,
-                                      size: 16,
-                                      color: AppTheme.textSecondary,
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: stop['destination'],
-                                      decoration: InputDecoration(
-                                        labelText: _loc.t('destination'),
-                                        border: const OutlineInputBorder(),
-                                        isDense: true,
-                                      ),
-                                      style: const TextStyle(fontSize: 13),
-                                    ),
-                                  ),
-                                ],
+                              child: Text(
+                                '${idx + 1}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: TextField(
-                                      controller: stop['startKm'],
-                                      decoration: InputDecoration(
-                                        labelText: _loc.t('start_km'),
-                                        border: const OutlineInputBorder(),
-                                        isDense: true,
-                                      ),
-                                      keyboardType: TextInputType.number,
-                                      style: const TextStyle(fontSize: 13),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: stop['endKm'],
-                                      decoration: InputDecoration(
-                                        labelText: _loc.t('end_km'),
-                                        border: const OutlineInputBorder(),
-                                        isDense: true,
-                                      ),
-                                      keyboardType: TextInputType.number,
-                                      style: const TextStyle(fontSize: 13),
-                                    ),
-                                  ),
-                                ],
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TextField(
+                                controller: ctrl,
+                                decoration: InputDecoration(
+                                  labelText: 'City / Stop Name',
+                                  border: const OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                                style: const TextStyle(fontSize: 14),
+                                onChanged: (_) => setState(() {}),
                               ),
-                            ],
-                          ),
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.close,
+                                size: 18,
+                                color: AppTheme.error,
+                              ),
+                              onPressed: () => _removeCityStop(idx),
+                            ),
+                          ],
                         ),
                       );
                     }),
@@ -722,11 +746,11 @@ class _DriverLogbookScreenState extends State<DriverLogbookScreen> {
     vehicleCtrl.dispose();
     fuelCtrl.dispose();
     tollCtrl.dispose();
+    startKmCtrl.dispose();
+    endKmCtrl.dispose();
     dateCtrl.dispose();
-    for (final stop in _routeStops) {
-      for (final ctrl in stop.values) {
-        ctrl.dispose();
-      }
+    for (final c in _cityStops) {
+      c.dispose();
     }
     for (final f in _dynamicFields) {
       f['key']?.dispose();

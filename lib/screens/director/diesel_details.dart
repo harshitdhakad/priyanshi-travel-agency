@@ -1,129 +1,165 @@
 import 'package:flutter/material.dart';
-import '../../services/auth_service.dart';
+import '../../services/supabase_service.dart';
+import '../../services/app_theme.dart';
 
 class DieselDetailsScreen extends StatelessWidget {
-  final AuthService authService;
-  const DieselDetailsScreen({super.key, required this.authService});
+  final SupabaseService supabaseService;
+  const DieselDetailsScreen({super.key, required this.supabaseService});
 
   @override
   Widget build(BuildContext context) {
-    final records = authService.dieselRecords;
-    final totalLitres = records.fold(0.0, (s, r) => s + r.litres);
-    final totalAmount = records.fold(0.0, (s, r) => s + r.amount);
-
     return Container(
-      color: const Color(0xFFF5F5F5),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      color: AppTheme.background,
+      child: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: supabaseService.dieselPurchasesStream(),
+        builder: (context, snap) {
+          final records = snap.data ?? [];
+          final totalLitres = records.fold(
+            0.0,
+            (s, r) =>
+                s + (double.tryParse(r['liters']?.toString() ?? '0') ?? 0),
+          );
+          final totalAmount = records.fold(
+            0.0,
+            (s, r) =>
+                s + (double.tryParse(r['amount']?.toString() ?? '0') ?? 0),
+          );
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _summaryCard(
-                  'Total Litres',
-                  '${totalLitres.toStringAsFixed(1)} L',
-                  const Color(0xFFE65100),
+                Row(
+                  children: [
+                    _summaryCard(
+                      'Total Litres',
+                      '${totalLitres.toStringAsFixed(1)} L',
+                      AppTheme.warning,
+                    ),
+                    const SizedBox(width: 12),
+                    _summaryCard(
+                      'Total Spent',
+                      '₹${totalAmount.toStringAsFixed(0)}',
+                      AppTheme.primary,
+                    ),
+                    const SizedBox(width: 12),
+                    _summaryCard(
+                      'Records',
+                      '${records.length}',
+                      AppTheme.success,
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                _summaryCard(
-                  'Total Spent',
-                  '₹${totalAmount.toStringAsFixed(0)}',
-                  const Color(0xFF1A237E),
+                const SizedBox(height: 24),
+                const Text(
+                  'Diesel Log',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primary,
+                  ),
                 ),
-                const SizedBox(width: 12),
-                _summaryCard('Records', '${records.length}', Colors.green),
-              ],
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Diesel Log',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1A237E),
-              ),
-            ),
-            const SizedBox(height: 14),
-            ...records.map(
-              (r) => Card(
-                margin: const EdgeInsets.only(bottom: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE65100).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(10),
+                const SizedBox(height: 14),
+                if (records.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.divider),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.local_gas_station_outlined,
+                          size: 40,
+                          color: AppTheme.textHint,
                         ),
-                        child: const Icon(
-                          Icons.local_gas_station,
-                          color: Color(0xFFE65100),
-                          size: 24,
+                        const SizedBox(height: 8),
+                        Text(
+                          'No diesel records',
+                          style: TextStyle(color: AppTheme.textHint),
                         ),
+                      ],
+                    ),
+                  )
+                else
+                  ...records.map(
+                    (r) => Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Row(
                           children: [
-                            Text(
-                              r.vehicleNumber,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14.5,
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: AppTheme.warning.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.local_gas_station,
+                                color: AppTheme.warning,
+                                size: 24,
                               ),
                             ),
-                            if (r.driverName != null)
-                              Text(
-                                'Driver: ${r.driverName}',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 12,
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    r['vehicle_number']?.toString() ??
+                                        'Unknown',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14.5,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Date: ${r['purchase_date'] ?? 'N/A'}',
+                                    style: TextStyle(
+                                      color: Colors.grey[500],
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  '${(double.tryParse(r['liters']?.toString() ?? '0') ?? 0).toStringAsFixed(1)} L',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: AppTheme.warning,
+                                  ),
                                 ),
-                              ),
-                            Text(
-                              '${r.date.day}/${r.date.month}/${r.date.year} · KM: ${r.kmReading.toStringAsFixed(0)}',
-                              style: TextStyle(
-                                color: Colors.grey[500],
-                                fontSize: 11,
-                              ),
+                                Text(
+                                  '₹${(double.tryParse(r['amount']?.toString() ?? '0') ?? 0).toStringAsFixed(0)}',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            '${r.litres.toStringAsFixed(1)} L',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: Color(0xFFE65100),
-                            ),
-                          ),
-                          Text(
-                            '₹${r.amount.toStringAsFixed(0)}',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -151,7 +187,7 @@ class DieselDetailsScreen extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.8),
+                color: Colors.white.withValues(alpha: 0.8),
                 fontSize: 12,
               ),
             ),

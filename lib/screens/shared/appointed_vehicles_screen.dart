@@ -195,159 +195,191 @@ class _AppointedVehiclesScreenState extends State<AppointedVehiclesScreen> {
   Widget build(BuildContext context) {
     return Container(
       color: const Color(0xFFF5F5F5),
-      child: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: widget.supabaseService.appointedVehiclesStream(),
-        builder: (context, snap) {
-          var appointments = snap.data ?? [];
-          if (widget.isDriverView && widget.currentDriverId != null) {
-            appointments = appointments
-                .where((a) => a['driver_id'] == widget.currentDriverId)
-                .toList();
+      child: FutureBuilder<List<dynamic>>(
+        future: Future.wait([
+          widget.supabaseService.getProfiles('driver'),
+          widget.supabaseService.getVehicles(),
+        ]),
+        builder: (context, lookupSnap) {
+          final drivers = lookupSnap.hasData
+              ? (lookupSnap.data![0] as List<Map<String, dynamic>>)
+              : <Map<String, dynamic>>[];
+          final vehicles = lookupSnap.hasData
+              ? (lookupSnap.data![1] as List<Map<String, dynamic>>)
+              : <Map<String, dynamic>>[];
+
+          String driverName(String id) {
+            final match = drivers.where((d) => d['id'] == id);
+            return match.isNotEmpty ? (match.first['name'] ?? id) : id;
           }
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (!widget.isDriverView) ...[
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
+
+          String vehicleName(String id) {
+            final match = vehicles.where((v) => v['id'] == id);
+            if (match.isNotEmpty) {
+              final v = match.first;
+              return '${v['car_name'] ?? ''} ${v['number_plate'] ?? ''}'.trim();
+            }
+            return id;
+          }
+
+          return StreamBuilder<List<Map<String, dynamic>>>(
+            stream: widget.supabaseService.appointedVehiclesStream(),
+            builder: (context, snap) {
+              var appointments = snap.data ?? [];
+              if (widget.isDriverView && widget.currentDriverId != null) {
+                appointments = appointments
+                    .where((a) => a['driver_id'] == widget.currentDriverId)
+                    .toList();
+              }
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (!widget.isDriverView) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Appointed Vehicles',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1A237E),
+                            ),
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: _showAppointDialog,
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('Appoint'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF1A237E),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                    ] else ...[
                       const Text(
-                        'Appointed Vehicles',
+                        'My Appointed Vehicle',
                         style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF1A237E),
                         ),
                       ),
-                      ElevatedButton.icon(
-                        onPressed: _showAppointDialog,
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Appoint'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1A237E),
-                          foregroundColor: Colors.white,
+                      const SizedBox(height: 16),
+                    ],
+                    if (!lookupSnap.hasData)
+                      const Center(child: CircularProgressIndicator())
+                    else if (appointments.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(32),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.directions_car_outlined,
+                              size: 40,
+                              color: Colors.grey[400],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'No appointments',
+                              style: TextStyle(color: Colors.grey[500]),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      ...appointments.map(
+                        (a) => Card(
+                          margin: const EdgeInsets.only(bottom: 10),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        (a['is_active'] == true
+                                                ? Colors.green
+                                                : Colors.grey)
+                                            .withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(
+                                    Icons.directions_car,
+                                    color: a['is_active'] == true
+                                        ? Colors.green
+                                        : Colors.grey,
+                                    size: 24,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Driver: ${driverName(a['driver_id']?.toString() ?? '')}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Vehicle: ${vehicleName(a['vehicle_id']?.toString() ?? '')}',
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      Text(
+                                        'From: ${a['appointed_date'] ?? 'N/A'}',
+                                        style: TextStyle(
+                                          color: Colors.grey[500],
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (!widget.isDriverView)
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.delete_outline,
+                                      color: Colors.red,
+                                      size: 20,
+                                    ),
+                                    onPressed: () async {
+                                      await widget.supabaseService
+                                          .removeAppointment(a['id']);
+                                    },
+                                  ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                ] else ...[
-                  const Text(
-                    'My Appointed Vehicle',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1A237E),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                if (appointments.isEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(32),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.directions_car_outlined,
-                          size: 40,
-                          color: Colors.grey[400],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'No appointments',
-                          style: TextStyle(color: Colors.grey[500]),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  ...appointments.map(
-                    (a) => Card(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color:
-                                    (a['is_active'] == true
-                                            ? Colors.green
-                                            : Colors.grey)
-                                        .withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Icon(
-                                Icons.directions_car,
-                                color: a['is_active'] == true
-                                    ? Colors.green
-                                    : Colors.grey,
-                                size: 24,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Driver: ${a['driver_id']}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Vehicle: ${a['vehicle_id']}',
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  Text(
-                                    'From: ${a['appointed_date'] ?? 'N/A'}',
-                                    style: TextStyle(
-                                      color: Colors.grey[500],
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (!widget.isDriverView)
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.delete_outline,
-                                  color: Colors.red,
-                                  size: 20,
-                                ),
-                                onPressed: () async {
-                                  await widget.supabaseService
-                                      .removeAppointment(a['id']);
-                                },
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+                  ],
+                ),
+              );
+            },
           );
         },
       ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/supabase_service.dart';
+import '../../services/app_theme.dart';
 import 'package:intl/intl.dart';
 
 class DieselPurchaseScreen extends StatefulWidget {
@@ -19,6 +20,18 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
   void _showAddDiesel() async {
     final vehicles = await widget.supabaseService.getVehicles();
     if (!mounted) return;
+
+    // Auto-select driver's assigned vehicle
+    String? selVehicle;
+    if (widget.driverId != null && vehicles.isNotEmpty) {
+      final match = vehicles.where(
+        (v) => v['assigned_driver_id'] == widget.driverId,
+      );
+      if (match.isNotEmpty) {
+        selVehicle = match.first['id'] as String;
+      }
+    }
+
     showDialog(
       context: context,
       builder: (ctx) {
@@ -27,7 +40,7 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
         final dateCtrl = TextEditingController(
           text: DateFormat('yyyy-MM-dd').format(DateTime.now()),
         );
-        String? selVehicle;
+        bool saving = false;
         return StatefulBuilder(
           builder: (ctx, setS) => AlertDialog(
             shape: RoundedRectangleBorder(
@@ -36,102 +49,150 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
             title: const Text(
               'Add Diesel Purchase',
               style: TextStyle(
-                color: Color(0xFF1A237E),
+                color: AppTheme.primary,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<String>(
-                  initialValue: selVehicle,
-                  decoration: const InputDecoration(
-                    labelText: 'Select Vehicle',
-                    border: OutlineInputBorder(),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: selVehicle,
+                    decoration: const InputDecoration(
+                      labelText: 'Select Vehicle',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: vehicles
+                        .map(
+                          (v) => DropdownMenuItem<String>(
+                            value: v['id'] as String,
+                            child: Text(
+                              '${v['car_name'] ?? ''} ${v['number_plate'] ?? ''}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) => setS(() => selVehicle = v),
                   ),
-                  items: vehicles
-                      .map(
-                        (v) => DropdownMenuItem<String>(
-                          value: v['id'] as String,
-                          child: Text('${v['car_name']} ${v['number_plate']}'),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) => setS(() => selVehicle = v),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: amtCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Amount (₹)',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: amtCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Amount (₹)',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
                   ),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: litersCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Liters',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: litersCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Liters',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
                   ),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: dateCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Date',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: dateCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Date',
+                      border: OutlineInputBorder(),
+                    ),
+                    readOnly: true,
+                    onTap: () async {
+                      final p = await showDatePicker(
+                        context: ctx,
+                        initialDate: DateTime.now(),
+                        firstDate: DateTime(2024),
+                        lastDate: DateTime(2030),
+                      );
+                      if (p != null) {
+                        dateCtrl.text = DateFormat('yyyy-MM-dd').format(p);
+                      }
+                    },
                   ),
-                  readOnly: true,
-                  onTap: () async {
-                    final p = await showDatePicker(
-                      context: ctx,
-                      initialDate: DateTime.now(),
-                      firstDate: DateTime(2024),
-                      lastDate: DateTime(2030),
-                    );
-                    if (p != null) {
-                      dateCtrl.text = DateFormat('yyyy-MM-dd').format(p);
-                    }
-                  },
-                ),
-              ],
+                ],
+              ),
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(ctx),
+                onPressed: saving ? null : () => Navigator.pop(ctx),
                 child: const Text('Cancel'),
               ),
               ElevatedButton(
-                onPressed: () async {
-                  if (amtCtrl.text.isEmpty) return;
-                  final vehicle = vehicles.firstWhere(
-                    (v) => v['id'] == selVehicle,
-                    orElse: () => {},
-                  );
-                  await widget.supabaseService.addDieselPurchase(
-                    driverId: widget.driverId,
-                    vehicleId: selVehicle,
-                    vehicleNumber: vehicle['number_plate'],
-                    amount: double.tryParse(amtCtrl.text) ?? 0,
-                    liters: double.tryParse(litersCtrl.text),
-                    date: dateCtrl.text,
-                  );
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Diesel purchase added'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                },
+                onPressed: saving
+                    ? null
+                    : () async {
+                        if (selVehicle == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Please select a vehicle'),
+                              backgroundColor: AppTheme.warning,
+                            ),
+                          );
+                          return;
+                        }
+                        if (amtCtrl.text.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Please enter amount'),
+                              backgroundColor: AppTheme.warning,
+                            ),
+                          );
+                          return;
+                        }
+                        setS(() => saving = true);
+                        try {
+                          final vehicle = vehicles.firstWhere(
+                            (v) => v['id'] == selVehicle,
+                            orElse: () => <String, dynamic>{},
+                          );
+                          await widget.supabaseService.addDieselPurchase(
+                            driverId: widget.driverId,
+                            vehicleId: selVehicle,
+                            vehicleNumber: vehicle['number_plate'] as String?,
+                            amount: double.tryParse(amtCtrl.text) ?? 0,
+                            liters: double.tryParse(litersCtrl.text),
+                            date: dateCtrl.text,
+                          );
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Diesel purchase added'),
+                                backgroundColor: AppTheme.success,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          setS(() => saving = false);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Error saving: $e'),
+                                backgroundColor: AppTheme.error,
+                              ),
+                            );
+                          }
+                        }
+                      },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1A237E),
+                  backgroundColor: AppTheme.primary,
                   foregroundColor: Colors.white,
                 ),
-                child: const Text('Save'),
+                child: saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text('Save'),
               ),
             ],
           ),
@@ -143,7 +204,7 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFF5F5F5),
+      color: AppTheme.background,
       child: StreamBuilder<List<Map<String, dynamic>>>(
         stream: widget.supabaseService.dieselPurchasesStream(),
         builder: (context, snap) {
@@ -162,11 +223,11 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
               );
               final daysSince = DateTime.now().difference(lastDate).inDays;
               if (daysSince >= 3) {
-                warningMsg = '⚠ No diesel purchase in last $daysSince days!';
+                warningMsg = 'No diesel purchase in last $daysSince days!';
               }
             } catch (_) {}
           } else {
-            warningMsg = '⚠ No diesel purchases recorded yet!';
+            warningMsg = 'No diesel purchases recorded yet!';
           }
 
           return SingleChildScrollView(
@@ -182,7 +243,7 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF1A237E),
+                        color: AppTheme.primary,
                       ),
                     ),
                     ElevatedButton.icon(
@@ -190,7 +251,7 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
                       icon: const Icon(Icons.add, size: 18),
                       label: const Text('Add'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1A237E),
+                        backgroundColor: AppTheme.primary,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
@@ -206,16 +267,28 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
                     padding: const EdgeInsets.all(12),
                     margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.1),
+                      color: AppTheme.warning.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.orange),
+                      border: Border.all(color: AppTheme.warning),
                     ),
-                    child: Text(
-                      warningMsg,
-                      style: const TextStyle(
-                        color: Colors.orange,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          color: AppTheme.warning,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            warningMsg,
+                            style: const TextStyle(
+                              color: AppTheme.warning,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 if (purchases.isEmpty)
@@ -223,21 +296,21 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(32),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppTheme.surface,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade200),
+                      border: Border.all(color: AppTheme.divider),
                     ),
                     child: Column(
                       children: [
                         Icon(
                           Icons.local_gas_station_outlined,
                           size: 40,
-                          color: Colors.grey[400],
+                          color: AppTheme.textHint,
                         ),
                         const SizedBox(height: 8),
                         Text(
                           'No diesel purchases',
-                          style: TextStyle(color: Colors.grey[500]),
+                          style: TextStyle(color: AppTheme.textHint),
                         ),
                       ],
                     ),
@@ -254,12 +327,12 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
                         leading: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.orange.withValues(alpha: 0.1),
+                            color: AppTheme.warning.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Icon(
                             Icons.local_gas_station,
-                            color: Colors.orange,
+                            color: AppTheme.warning,
                             size: 18,
                           ),
                         ),
@@ -276,7 +349,7 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
                         trailing: Text(
                           '₹${p['amount']}',
                           style: const TextStyle(
-                            color: Color(0xFF1A237E),
+                            color: AppTheme.primary,
                             fontWeight: FontWeight.bold,
                           ),
                         ),

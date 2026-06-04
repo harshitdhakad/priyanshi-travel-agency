@@ -259,13 +259,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                           Colors.red,
                                           currentStatus == 'absent',
                                         ),
-                                        _attButtonLarge(
-                                          widget.currentDriverId!,
-                                          'holiday',
-                                          'Holiday',
-                                          Colors.blue,
-                                          currentStatus == 'holiday',
-                                        ),
                                       ],
                                     ),
                                   ),
