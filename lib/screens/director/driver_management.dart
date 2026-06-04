@@ -65,8 +65,9 @@ class _DriverManagementScreenState extends State<DriverManagementScreen> {
                         firstDate: DateTime(2020),
                         lastDate: DateTime(2030),
                       );
-                      if (picked != null)
+                      if (picked != null) {
                         setDialogState(() => joiningDate = picked);
+                      }
                     },
                     child: InputDecorator(
                       decoration: InputDecoration(

@@ -78,8 +78,9 @@ class _EventsScreenState extends State<EventsScreen> {
                       firstDate: DateTime(2024),
                       lastDate: DateTime(2030),
                     );
-                    if (p != null)
+                    if (p != null) {
                       dateCtrl.text = DateFormat('yyyy-MM-dd').format(p);
+                    }
                   },
                 ),
                 const SizedBox(height: 8),
@@ -102,7 +103,7 @@ class _EventsScreenState extends State<EventsScreen> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: status,
+                  initialValue: status,
                   decoration: const InputDecoration(
                     labelText: 'Status',
                     border: OutlineInputBorder(),
@@ -271,7 +272,7 @@ class _EventsScreenState extends State<EventsScreen> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: status,
+                  initialValue: status,
                   decoration: const InputDecoration(
                     labelText: 'Status',
                     border: OutlineInputBorder(),
@@ -529,10 +530,11 @@ class _EventsScreenState extends State<EventsScreen> {
                               ],
                             ),
                           );
-                          if (confirm == true)
+                          if (confirm == true) {
                             await widget.supabaseService.deleteEvent(
                               event['id'],
                             );
+                          }
                         },
                       ),
                   ],

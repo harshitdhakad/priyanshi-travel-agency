@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../services/supabase_service.dart';
-import 'package:intl/intl.dart';
 
 class AppointedVehiclesScreen extends StatefulWidget {
   final SupabaseService supabaseService;

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'services/auth_service.dart';
 import 'services/supabase_service.dart';
 import 'services/app_theme.dart';
@@ -17,9 +18,10 @@ import 'package:intl/intl.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: '.env');
   await Supabase.initialize(
-    url: 'https://akbhzzonmzzxvuammxtw.supabase.co',
-    anonKey: 'sb_secret_M4WHDrV2mEGN2k8-kM7ceQ_bT94GSVe',
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
   await AppLocalizations().loadLocale();
   runApp(const MyApp());
@@ -41,6 +43,7 @@ class _MyAppState extends State<MyApp> {
   bool _checkingTables = true;
   bool _tablesExist = false;
   bool _showSplash = true;
+  bool _splashFired = false;
   bool _checkingLanguage = true;
   bool _needsLanguageSelection = false;
   Timer? _reminderTimer;
@@ -53,20 +56,38 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _initApp() async {
-    final hasChosen = await _loc.hasChosenLanguage();
-    final tablesExist = await _supabaseService.checkTablesExist();
-    if (!mounted) return;
-    setState(() {
-      _checkingLanguage = false;
-      _needsLanguageSelection = !hasChosen;
-      _tablesExist = tablesExist;
-      _checkingTables = false;
-    });
+    try {
+      final hasChosen = await _loc.hasChosenLanguage();
+      final tablesExist = await _supabaseService.checkTablesExist().timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => false,
+      );
+      if (!mounted) return;
+      setState(() {
+        _checkingLanguage = false;
+        _needsLanguageSelection = !hasChosen;
+        _tablesExist = tablesExist;
+        _checkingTables = false;
+      });
+    } catch (_) {
+      // If anything fails, still proceed past splash
+      if (!mounted) return;
+      setState(() {
+        _checkingLanguage = false;
+        _checkingTables = false;
+        _tablesExist = false;
+      });
+    }
     _startReminderTimer();
   }
 
   void _onSplashComplete() {
-    if (mounted) setState(() => _showSplash = false);
+    if (!_splashFired && mounted) {
+      setState(() {
+        _splashFired = true;
+        _showSplash = false;
+      });
+    }
   }
 
   void _startReminderTimer() {
@@ -164,13 +185,30 @@ class _MyAppState extends State<MyApp> {
   }
 
   Widget _buildHome() {
-    // Initial loading
-    if (_checkingLanguage || _checkingTables) {
-      return AnimatedSplashScreen(onComplete: () {});
-    }
-    // Animated splash
-    if (_showSplash) {
+    // Show splash only once - during initial loading or dedicated splash phase
+    if (!_splashFired) {
       return AnimatedSplashScreen(onComplete: _onSplashComplete);
+    }
+    // Still loading after splash - show simple loading indicator
+    if (_checkingLanguage || _checkingTables) {
+      return Scaffold(
+        body: Container(
+          color: AppTheme.background,
+          child: const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(color: AppTheme.primary),
+                SizedBox(height: 16),
+                Text(
+                  'Loading...',
+                  style: TextStyle(color: AppTheme.textHint, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
     // Language selector
     if (_needsLanguageSelection) {

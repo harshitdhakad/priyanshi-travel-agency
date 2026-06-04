@@ -189,7 +189,7 @@ class _LogbookAdminScreenState extends State<LogbookAdminScreen> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: status,
+                  initialValue: status,
                   decoration: const InputDecoration(
                     labelText: 'Bill Status',
                     border: OutlineInputBorder(),
@@ -287,12 +287,13 @@ class _LogbookAdminScreenState extends State<LogbookAdminScreen> {
                           firstDate: DateTime(2024),
                           lastDate: DateTime(2030),
                         );
-                        if (picked != null)
+                        if (picked != null) {
                           setState(
                             () => _filterMonth = DateFormat(
                               'yyyy-MM',
                             ).format(picked),
                           );
+                        }
                       },
                       icon: const Icon(Icons.date_range, size: 16),
                       label: Text(
@@ -454,8 +455,9 @@ class _LogbookAdminScreenState extends State<LogbookAdminScreen> {
                             ],
                           ),
                         );
-                        if (confirm == true)
+                        if (confirm == true) {
                           await widget.supabaseService.deleteLogbook(l['id']);
+                        }
                       },
                     ),
                   ],

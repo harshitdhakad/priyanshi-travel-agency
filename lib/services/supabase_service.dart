@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -324,7 +323,11 @@ ALTER TABLE fleet_logbooks ADD COLUMN IF NOT EXISTS not_went_anywhere BOOLEAN DE
   // ── Check if tables exist ──
   Future<bool> checkTablesExist() async {
     try {
-      await client.from('profiles').select('id').limit(1);
+      await client
+          .from('profiles')
+          .select('id')
+          .limit(1)
+          .timeout(const Duration(seconds: 10));
       _tablesExist = true;
       notifyListeners();
       return true;

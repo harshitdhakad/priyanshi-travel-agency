@@ -249,7 +249,7 @@ class _BookingOfficesScreenState extends State<BookingOfficesScreen>
                   ),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
-                    value: selDriver,
+                    initialValue: selDriver,
                     decoration: const InputDecoration(
                       labelText: 'Primary Driver',
                       border: OutlineInputBorder(),
@@ -1132,7 +1132,7 @@ class _AddAssignmentRowState extends State<_AddAssignmentRow> {
         ),
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
-          value: _selVehicle,
+          initialValue: _selVehicle,
           decoration: const InputDecoration(
             labelText: 'Select Vehicle',
             border: OutlineInputBorder(),
@@ -1154,7 +1154,7 @@ class _AddAssignmentRowState extends State<_AddAssignmentRow> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: _selDriver,
+          initialValue: _selDriver,
           decoration: const InputDecoration(
             labelText: 'Select Driver (optional)',
             border: OutlineInputBorder(),

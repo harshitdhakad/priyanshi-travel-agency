@@ -71,8 +71,9 @@ class _SalaryManagementScreenState extends State<SalaryManagementScreen> {
                   firstDate: DateTime(2024),
                   lastDate: DateTime(2030),
                 );
-                if (p != null)
+                if (p != null) {
                   dateCtrl.text = DateFormat('yyyy-MM-dd').format(p);
+                }
               },
             ),
           ],
@@ -185,11 +186,12 @@ class _SalaryManagementScreenState extends State<SalaryManagementScreen> {
                     firstDate: DateTime(2024),
                     lastDate: DateTime(2030),
                   );
-                  if (picked != null)
+                  if (picked != null) {
                     setState(
                       () =>
                           _selectedMonth = DateFormat('yyyy-MM').format(picked),
                     );
+                  }
                 },
                 icon: const Icon(Icons.date_range, size: 16),
                 label: Text(

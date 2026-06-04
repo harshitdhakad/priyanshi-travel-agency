@@ -92,8 +92,9 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
                       firstDate: DateTime(2024),
                       lastDate: DateTime(2030),
                     );
-                    if (p != null)
+                    if (p != null) {
                       dateCtrl.text = DateFormat('yyyy-MM-dd').format(p);
+                    }
                   },
                 ),
               ],

@@ -49,7 +49,7 @@ class _ServicingScreenState extends State<ServicingScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   DropdownButtonFormField<String>(
-                    value: selVehicleId,
+                    initialValue: selVehicleId,
                     decoration: const InputDecoration(
                       labelText: 'Select Car',
                       border: OutlineInputBorder(),
@@ -89,8 +89,9 @@ class _ServicingScreenState extends State<ServicingScreen> {
                         firstDate: DateTime(2024),
                         lastDate: DateTime(2030),
                       );
-                      if (picked != null)
+                      if (picked != null) {
                         dateCtrl.text = DateFormat('yyyy-MM-dd').format(picked);
+                      }
                     },
                   ),
                   const SizedBox(height: 10),
