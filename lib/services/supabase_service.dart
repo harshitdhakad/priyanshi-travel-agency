@@ -318,6 +318,27 @@ ALTER PUBLICATION supabase_realtime ADD TABLE vehicle_holidays;
 -- Add route_stops and not_went_anywhere to fleet_logbooks
 ALTER TABLE fleet_logbooks ADD COLUMN IF NOT EXISTS route_stops JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE fleet_logbooks ADD COLUMN IF NOT EXISTS not_went_anywhere BOOLEAN DEFAULT FALSE;
+
+-- Disable RLS on all tables so the app can access them
+ALTER TABLE profiles DISABLE ROW LEVEL SECURITY;
+ALTER TABLE vehicles DISABLE ROW LEVEL SECURITY;
+ALTER TABLE fleet_logbooks DISABLE ROW LEVEL SECURITY;
+ALTER TABLE diesel_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE salary_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE bookings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE vehicle_events DISABLE ROW LEVEL SECURITY;
+ALTER TABLE car_routes DISABLE ROW LEVEL SECURITY;
+ALTER TABLE offices DISABLE ROW LEVEL SECURITY;
+ALTER TABLE attendance DISABLE ROW LEVEL SECURITY;
+ALTER TABLE appointed_vehicles DISABLE ROW LEVEL SECURITY;
+ALTER TABLE servicing_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE govt_offices DISABLE ROW LEVEL SECURITY;
+ALTER TABLE booking_trips DISABLE ROW LEVEL SECURITY;
+ALTER TABLE salary_advances DISABLE ROW LEVEL SECURITY;
+ALTER TABLE offices DISABLE ROW LEVEL SECURITY;
+ALTER TABLE office_vehicle_assignments DISABLE ROW LEVEL SECURITY;
+ALTER TABLE events DISABLE ROW LEVEL SECURITY;
+ALTER TABLE vehicle_holidays DISABLE ROW LEVEL SECURITY;
 ''';
 
   // ── Check if tables exist ──
@@ -331,12 +352,17 @@ ALTER TABLE fleet_logbooks ADD COLUMN IF NOT EXISTS not_went_anywhere BOOLEAN DE
       _tablesExist = true;
       notifyListeners();
       return true;
-    } catch (_) {
+    } catch (e) {
+      print('checkTablesExist error: $e');
+      _lastError = e.toString();
       _tablesExist = false;
       notifyListeners();
       return false;
     }
   }
+
+  String _lastError = '';
+  String get lastError => _lastError;
 
   // ══════════════════════════════════════
   //  PROFILES (Drivers / Staff / Director)

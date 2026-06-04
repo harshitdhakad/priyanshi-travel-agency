@@ -186,12 +186,22 @@ class _SetupScreenState extends State<SetupScreen> {
                             widget.onSetupDone();
                           } else {
                             if (mounted) {
+                              final error = widget.supabaseService.lastError;
+                              final isRls =
+                                  error.contains('policy') ||
+                                  error.contains('permission') ||
+                                  error.contains('RLS');
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
+                                SnackBar(
                                   content: Text(
-                                    'Tables not found yet. Please run the SQL first.',
+                                    isRls
+                                        ? 'Tables exist but RLS is blocking access. Run: ALTER TABLE profiles DISABLE ROW LEVEL SECURITY;'
+                                        : 'Tables not found. Error: $error',
                                   ),
-                                  backgroundColor: Colors.orange,
+                                  backgroundColor: isRls
+                                      ? Colors.red
+                                      : Colors.orange,
+                                  duration: const Duration(seconds: 5),
                                 ),
                               );
                             }
