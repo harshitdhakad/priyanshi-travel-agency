@@ -888,17 +888,44 @@ class _BookingOfficesScreenState extends State<BookingOfficesScreen>
                                       ),
                                       ElevatedButton(
                                         onPressed: () async {
-                                          await widget.supabaseService
-                                              .markOfficePayment(
-                                                officeId: o['id'],
-                                                month: currentMonth,
-                                                isPaid: !isPaid,
-                                                amount: double.tryParse(
-                                                  o['monthly_income']
-                                                          ?.toString() ??
-                                                      '0',
+                                          try {
+                                            await widget.supabaseService
+                                                .markOfficePayment(
+                                                  officeId: o['id'],
+                                                  month: currentMonth,
+                                                  isPaid: !isPaid,
+                                                  amount: double.tryParse(
+                                                    o['monthly_income']
+                                                            ?.toString() ??
+                                                        '0',
+                                                  ),
+                                                );
+                                            if (ctx.mounted) {
+                                              ScaffoldMessenger.of(
+                                                ctx,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    !isPaid
+                                                        ? 'Marked as Paid'
+                                                        : 'Marked as Unpaid',
+                                                  ),
+                                                  backgroundColor: Colors.green,
                                                 ),
                                               );
+                                            }
+                                          } catch (e) {
+                                            if (ctx.mounted) {
+                                              ScaffoldMessenger.of(
+                                                ctx,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: Text('Error: $e'),
+                                                  backgroundColor: Colors.red,
+                                                ),
+                                              );
+                                            }
+                                          }
                                         },
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: isPaid

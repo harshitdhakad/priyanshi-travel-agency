@@ -793,8 +793,10 @@ class GovernmentPdfService {
           .toList();
       if (cities.isNotEmpty) return cities.join(' \u2192 ');
     }
-    final src = entry['source']?.toString() ?? '';
     final dest = entry['destination']?.toString() ?? '';
+    final src = entry['source']?.toString() ?? '';
+    // If destination contains ' - ' it's a multi-stop route like "Vidisha - Bhopal - Vidisha"
+    if (dest.contains(' - ')) return dest;
     if (src.isNotEmpty && dest.isNotEmpty) return '$src \u2192 $dest';
     if (dest.isNotEmpty) return dest;
     if (entry['not_went_anywhere'] == true) return 'Station (No trip)';
@@ -1095,5 +1097,162 @@ class GovernmentPdfService {
         ],
       ),
     );
+  }
+
+  /// Generates a servicing history PDF for a vehicle
+  static Future<Uint8List> generateServicingPdf({
+    required String vehicleName,
+    required String vehicleNumber,
+    required String agencyName,
+    required List<Map<String, dynamic>> records,
+  }) async {
+    final pdf = pw.Document();
+
+    // Sort by date descending
+    records.sort(
+      (a, b) =>
+          (b['servicing_date'] ?? '').compareTo(a['servicing_date'] ?? ''),
+    );
+
+    double totalCost = 0;
+    for (final r in records) {
+      totalCost += (double.tryParse(r['cost']?.toString() ?? '0') ?? 0);
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(30),
+        header: (ctx) => pw.Container(
+          decoration: pw.BoxDecoration(
+            border: pw.Border(
+              bottom: pw.BorderSide(width: 2, color: PdfColors.black),
+            ),
+          ),
+          padding: const pw.EdgeInsets.only(bottom: 8),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    agencyName.toUpperCase(),
+                    style: pw.TextStyle(
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.Text(
+                    'Vehicle Servicing Record',
+                    style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+                  ),
+                ],
+              ),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text(
+                    'Vehicle: $vehicleName ($vehicleNumber)',
+                    style: pw.TextStyle(
+                      fontSize: 10,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.Text(
+                    'Generated: ${DateFormat('dd MMM yyyy').format(DateTime.now())}',
+                    style: pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        footer: (ctx) => pw.Container(
+          decoration: pw.BoxDecoration(
+            border: pw.Border(
+              top: pw.BorderSide(width: 1, color: PdfColors.grey400),
+            ),
+          ),
+          padding: const pw.EdgeInsets.only(top: 6),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'This is a computer-generated document. No signature required.',
+                style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
+              ),
+              pw.Text(
+                'Page ${ctx.pageNumber} of ${ctx.pagesCount}',
+                style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
+              ),
+            ],
+          ),
+        ),
+        build: (ctx) => [
+          // Table
+          pw.TableHelper.fromTextArray(
+            headerStyle: pw.TextStyle(
+              fontSize: 9,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.white,
+            ),
+            headerDecoration: pw.BoxDecoration(color: PdfColors.blueGrey800),
+            cellStyle: const pw.TextStyle(fontSize: 9),
+            cellAlignment: pw.Alignment.centerLeft,
+            headerHeight: 25,
+            cellHeight: 24,
+            headers: [
+              'Sr.',
+              'Date',
+              'Parts Serviced',
+              'Description',
+              'Cost (Rs)',
+            ],
+            data: List.generate(records.length, (i) {
+              final r = records[i];
+              final parts = r['parts_serviced'];
+              final partsStr = parts is List
+                  ? parts.map((p) => p.toString()).join(', ')
+                  : (parts?.toString() ?? '-');
+              return [
+                '${i + 1}',
+                r['servicing_date'] ?? '',
+                partsStr,
+                r['description']?.toString() ?? '-',
+                (double.tryParse(r['cost']?.toString() ?? '0') ?? 0)
+                    .toStringAsFixed(0),
+              ];
+            }),
+          ),
+          pw.SizedBox(height: 20),
+          // Summary
+          pw.Container(
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.grey400),
+              borderRadius: pw.BorderRadius.circular(6),
+            ),
+            padding: const pw.EdgeInsets.all(12),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+              children: [
+                _summaryBox(
+                  'Total Services',
+                  '${records.length}',
+                  PdfColors.blue,
+                ),
+                _summaryBox(
+                  'Total Cost',
+                  'Rs ${totalCost.toStringAsFixed(0)}',
+                  PdfColors.red,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return pdf.save();
   }
 }

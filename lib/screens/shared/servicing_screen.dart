@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../services/supabase_service.dart';
+import '../../services/government_pdf_service.dart';
 import 'package:intl/intl.dart';
 
 class ServicingScreen extends StatefulWidget {
@@ -196,7 +200,7 @@ class _ServicingScreenState extends State<ServicingScreen> {
                         color: Color(0xFF1A237E),
                       ),
                     ),
-                    if (!widget.isDriverView)
+                    if (!widget.isDriverView || widget.currentDriverId != null)
                       ElevatedButton.icon(
                         onPressed: _showAddServicing,
                         icon: const Icon(Icons.add, size: 18),
@@ -278,72 +282,147 @@ class _ServicingScreenState extends State<ServicingScreen> {
                             fontSize: 12,
                           ),
                         ),
-                        children: entry.value.map((r) {
-                          final parts = r['parts_serviced'];
-                          final partsList = parts is List
-                              ? parts.map((p) => p.toString()).toList()
-                              : [];
-                          return Padding(
+                        children: [
+                          ...entry.value.map((r) {
+                            final parts = r['parts_serviced'];
+                            final partsList = parts is List
+                                ? parts.map((p) => p.toString()).toList()
+                                : [];
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 6,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        r['servicing_date'] ?? '',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                          color: Color(0xFF1E293B),
+                                        ),
+                                      ),
+                                      Text(
+                                        '₹${r['cost'] ?? 0}',
+                                        style: const TextStyle(
+                                          color: Color(0xFF1A237E),
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (partsList.isNotEmpty)
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 4,
+                                      children: partsList
+                                          .map(
+                                            (p) => Chip(
+                                              label: Text(
+                                                p,
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  color: Color(0xFF1E293B),
+                                                ),
+                                              ),
+                                              backgroundColor: const Color(
+                                                0xFFE8EAF6,
+                                              ),
+                                              side: const BorderSide(
+                                                color: Color(0xFF9FA8DA),
+                                              ),
+                                              padding: EdgeInsets.zero,
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                            ),
+                                          )
+                                          .toList(),
+                                    ),
+                                  if (r['description'] != null &&
+                                      r['description'].toString().isNotEmpty)
+                                    Text(
+                                      r['description'],
+                                      style: const TextStyle(
+                                        color: Color(0xFF334155),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  const Divider(),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          // PDF Download button for this vehicle
+                          Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 16,
-                              vertical: 6,
+                              vertical: 8,
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      r['servicing_date'] ?? '',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                    Text(
-                                      '₹${r['cost'] ?? 0}',
-                                      style: const TextStyle(
-                                        color: Color(0xFF1A237E),
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () async {
+                                  try {
+                                    final pdfBytes =
+                                        await GovernmentPdfService.generateServicingPdf(
+                                          vehicleName:
+                                              entry.key
+                                                  .split(' - ')
+                                                  .firstOrNull ??
+                                              entry.key,
+                                          vehicleNumber: entry.key,
+                                          agencyName: 'Priyanshi Travel Agency',
+                                          records: entry.value,
+                                        );
+                                    final dir = await getTemporaryDirectory();
+                                    final safeName = entry.key.replaceAll(
+                                      RegExp(r'[^a-zA-Z0-9]'),
+                                      '_',
+                                    );
+                                    final file = File(
+                                      '${dir.path}/servicing_$safeName.pdf',
+                                    );
+                                    await file.writeAsBytes(pdfBytes);
+                                    await Share.shareXFiles([
+                                      XFile(file.path),
+                                    ], text: 'Servicing Record - ${entry.key}');
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Error: $e'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                                icon: const Icon(
+                                  Icons.picture_as_pdf,
+                                  size: 16,
                                 ),
-                                if (partsList.isNotEmpty)
-                                  Wrap(
-                                    spacing: 6,
-                                    children: partsList
-                                        .map(
-                                          (p) => Chip(
-                                            label: Text(
-                                              p,
-                                              style: const TextStyle(
-                                                fontSize: 11,
-                                              ),
-                                            ),
-                                            padding: EdgeInsets.zero,
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                          ),
-                                        )
-                                        .toList(),
+                                label: const Text(
+                                  'Download PDF',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF1A237E),
+                                  side: const BorderSide(
+                                    color: Color(0xFF1A237E),
                                   ),
-                                if (r['description'] != null &&
-                                    r['description'].toString().isNotEmpty)
-                                  Text(
-                                    r['description'],
-                                    style: const TextStyle(
-                                      color: Color(0xFF334155),
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                const Divider(),
-                              ],
+                                ),
+                              ),
                             ),
-                          );
-                        }).toList(),
+                          ),
+                        ],
                       ),
                     );
                   }),

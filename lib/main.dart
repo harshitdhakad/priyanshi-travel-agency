@@ -34,7 +34,7 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   final AuthService _authService = AuthService();
   final SupabaseService _supabaseService = SupabaseService();
   final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
@@ -46,17 +46,21 @@ class _MyAppState extends State<MyApp> {
   bool _splashFired = false;
   bool _checkingLanguage = true;
   bool _needsLanguageSelection = false;
+  bool _resumingFromBg = false;
   Timer? _reminderTimer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loc.addListener(() => setState(() {}));
     _initApp();
   }
 
   Future<void> _initApp() async {
     try {
+      // Try to restore saved session first
+      await _authService.restoreSession();
       final hasChosen = await _loc.hasChosenLanguage();
       final tablesExist = await _supabaseService.checkTablesExist().timeout(
         const Duration(seconds: 15),
@@ -168,9 +172,18 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _reminderTimer?.cancel();
     _loc.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _splashFired) {
+      // App came back from background - skip splash
+      setState(() => _resumingFromBg = true);
+    }
   }
 
   @override
@@ -186,8 +199,12 @@ class _MyAppState extends State<MyApp> {
 
   Widget _buildHome() {
     // Show splash only once - during initial loading or dedicated splash phase
-    if (!_splashFired) {
+    // Skip splash if resuming from background
+    if (!_splashFired && !_resumingFromBg) {
       return AnimatedSplashScreen(onComplete: _onSplashComplete);
+    }
+    if (_resumingFromBg && _splashFired) {
+      // Already past splash, just go to app directly
     }
     // Still loading after splash - show simple loading indicator
     if (_checkingLanguage || _checkingTables) {

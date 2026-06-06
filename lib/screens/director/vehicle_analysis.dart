@@ -30,18 +30,47 @@ class _VehicleAnalysisScreenState extends State<VehicleAnalysisScreen> {
         stream: widget.supabaseService.vehicleStream(),
         builder: (context, vSnap) {
           final vehicles = vSnap.data ?? [];
+          if (vSnap.hasError) {
+            return Center(
+              child: Text(
+                'Error: ${vSnap.error}',
+                style: const TextStyle(color: Colors.red),
+              ),
+            );
+          }
           return StreamBuilder<List<Map<String, dynamic>>>(
             stream: widget.supabaseService.servicingStream(),
             builder: (context, sSnap) {
               final servicing = sSnap.data ?? [];
+              if (sSnap.hasError)
+                return Center(
+                  child: Text(
+                    'Error: ${sSnap.error}',
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                );
               return StreamBuilder<List<Map<String, dynamic>>>(
                 stream: widget.supabaseService.dieselPurchasesStream(),
                 builder: (context, dSnap) {
                   final diesel = dSnap.data ?? [];
+                  if (dSnap.hasError)
+                    return Center(
+                      child: Text(
+                        'Error loading diesel: ${dSnap.error}',
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    );
                   return StreamBuilder<List<Map<String, dynamic>>>(
                     stream: widget.supabaseService.govtOfficesStream(),
-                    builder: (context, oSnap) {
-                      final offices = oSnap.data ?? [];
+                    builder: (context, offSnap) {
+                      final offices = offSnap.data ?? [];
+                      if (offSnap.hasError)
+                        return Center(
+                          child: Text(
+                            'Error: ${offSnap.error}',
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        );
                       return StreamBuilder<List<Map<String, dynamic>>>(
                         stream: widget.supabaseService.bookingTripsStream(),
                         builder: (context, bSnap) {

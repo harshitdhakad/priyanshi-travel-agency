@@ -18,78 +18,8 @@ class _LogbookAdminScreenState extends State<LogbookAdminScreen> {
   String _filterMonth = DateFormat('yyyy-MM').format(DateTime.now());
   String? _uploadingId;
   bool _generatingMonthlyPdf = false;
-
-  Future<void> _generateMonthlyPdf() async {
-    setState(() => _generatingMonthlyPdf = true);
-    try {
-      // Get all logs for the selected month
-      final allLogs = await widget.supabaseService.getLogbooks(
-        month: _filterMonth,
-      );
-
-      if (allLogs.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No logbook entries for this month'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-        return;
-      }
-
-      // Group by vehicle
-      final vehicleMap = <String, List<Map<String, dynamic>>>{};
-      for (final log in allLogs) {
-        final vNum = log['vehicle_number']?.toString() ?? 'UNKNOWN';
-        vehicleMap.putIfAbsent(vNum, () => []).add(log);
-      }
-
-      // Generate PDF for each vehicle
-      for (final entry in vehicleMap.entries) {
-        final vehicleNumber = entry.key;
-        final logs = entry.value;
-
-        final pdfBytes = await GovernmentPdfService.generateMonthlyLogbookPdf(
-          vehicleNumber: vehicleNumber,
-          month: _filterMonth,
-          logEntries: logs,
-          agencyName: 'Priyanshi Travel Agency',
-        );
-
-        final safeVehicle = vehicleNumber.replaceAll(' ', '_');
-        final fileName =
-            '$safeVehicle'
-            '_monthly_$_filterMonth.pdf';
-
-        final dir = await getTemporaryDirectory();
-        final file = File('${dir.path}/$fileName');
-        await file.writeAsBytes(pdfBytes);
-
-        await Share.shareXFiles([
-          XFile(file.path),
-        ], text: 'Monthly Logbook - $vehicleNumber - $_filterMonth');
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Generated ${vehicleMap.length} monthly PDF(s)'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _generatingMonthlyPdf = false);
-    }
-  }
+  String?
+  _selectedVehicle; // null = show vehicle list, set = show vehicle logbooks
 
   Future<void> _generateAndUploadOfficialPdf(Map<String, dynamic> log) async {
     final logId = log['id']?.toString() ?? '';
@@ -323,162 +253,372 @@ class _LogbookAdminScreenState extends State<LogbookAdminScreen> {
       child: StreamBuilder<List<Map<String, dynamic>>>(
         stream: widget.supabaseService.logbookStream(),
         builder: (context, snap) {
-          var logs = snap.data ?? [];
-          logs = logs
+          final allLogs = snap.data ?? [];
+          final monthLogs = allLogs
               .where((l) => (l['log_date'] ?? '').startsWith(_filterMonth))
               .toList();
-          final draftCount = logs
-              .where((l) => l['bill_status'] == 'draft')
-              .length;
-          final submittedCount = logs
-              .where((l) => l['bill_status'] == 'submitted')
-              .length;
-          final clearedCount = logs
-              .where((l) => l['bill_status'] == 'cleared')
-              .length;
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Logbook Admin',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1A237E),
-                      ),
-                    ),
-                    TextButton.icon(
-                      onPressed: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: DateTime.now(),
-                          firstDate: DateTime(2024),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          setState(
-                            () => _filterMonth = DateFormat(
-                              'yyyy-MM',
-                            ).format(picked),
-                          );
-                        }
-                      },
-                      icon: const Icon(Icons.date_range, size: 16),
-                      label: Text(
-                        _filterMonth,
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    _statCard('Draft', '$draftCount', Colors.grey),
-                    const SizedBox(width: 8),
-                    _statCard('Submitted', '$submittedCount', Colors.orange),
-                    const SizedBox(width: 8),
-                    _statCard('Cleared', '$clearedCount', Colors.green),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _generatingMonthlyPdf
-                          ? Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: Colors.blue.withValues(alpha: 0.3),
-                                ),
-                              ),
-                              child: const Center(
-                                child: SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Color(0xFF1A237E),
-                                  ),
-                                ),
-                              ),
-                            )
-                          : InkWell(
-                              onTap: _generateMonthlyPdf,
-                              borderRadius: BorderRadius.circular(10),
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: const Color(
-                                    0xFF1A237E,
-                                  ).withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: const Color(
-                                      0xFF1A237E,
-                                    ).withValues(alpha: 0.3),
-                                  ),
-                                ),
-                                child: Column(
-                                  children: [
-                                    const Icon(
-                                      Icons.picture_as_pdf,
-                                      size: 18,
-                                      color: Color(0xFF1A237E),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Monthly PDF',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.grey[700],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                if (logs.isEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(32),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.book_outlined,
-                          size: 40,
-                          color: Colors.grey[400],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'No logbook entries for $_filterMonth',
-                          style: TextStyle(color: Colors.grey[500]),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  ...logs.map((l) => _buildLogCard(l)),
-              ],
-            ),
-          );
+
+          // Extract unique vehicles from all logs
+          final vehicleNumbers =
+              allLogs
+                  .map((l) => l['vehicle_number']?.toString() ?? '')
+                  .where((v) => v.isNotEmpty)
+                  .toSet()
+                  .toList()
+                ..sort();
+
+          // If a vehicle is selected, show its logbooks
+          if (_selectedVehicle != null) {
+            return _buildVehicleLogbooks(_selectedVehicle!, monthLogs);
+          }
+
+          // Otherwise show vehicle list
+          return _buildVehicleList(vehicleNumbers, allLogs, monthLogs);
         },
       ),
     );
+  }
+
+  Widget _buildVehicleList(
+    List<String> vehicleNumbers,
+    List<Map<String, dynamic>> allLogs,
+    List<Map<String, dynamic>> monthLogs,
+  ) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Fleet Logbook',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1A237E),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime(2024),
+                    lastDate: DateTime(2030),
+                  );
+                  if (picked != null) {
+                    setState(
+                      () => _filterMonth = DateFormat('yyyy-MM').format(picked),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.date_range, size: 16),
+                label: Text(_filterMonth, style: const TextStyle(fontSize: 13)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (vehicleNumbers.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.directions_car_outlined,
+                    size: 40,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No vehicles with logbook entries',
+                    style: TextStyle(color: Colors.grey[500]),
+                  ),
+                ],
+              ),
+            )
+          else
+            ...vehicleNumbers.map((vNum) {
+              final vLogs = monthLogs
+                  .where((l) => l['vehicle_number'] == vNum)
+                  .toList();
+              final totalCount = vLogs.length;
+              final draftCount = vLogs
+                  .where((l) => l['bill_status'] == 'draft')
+                  .length;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => setState(() => _selectedVehicle = vNum),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFF1A237E,
+                            ).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.directions_car,
+                            color: Color(0xFF1A237E),
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                vNum,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: Color(0xFF1A237E),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '$totalCount entries this month',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                              if (draftCount > 0)
+                                Text(
+                                  '$draftCount draft(s)',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.orange,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right, color: Colors.grey),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVehicleLogbooks(
+    String vehicleNumber,
+    List<Map<String, dynamic>> monthLogs,
+  ) {
+    final logs = monthLogs
+        .where((l) => l['vehicle_number'] == vehicleNumber)
+        .toList();
+    final draftCount = logs.where((l) => l['bill_status'] == 'draft').length;
+    final submittedCount = logs
+        .where((l) => l['bill_status'] == 'submitted')
+        .length;
+    final clearedCount = logs
+        .where((l) => l['bill_status'] == 'cleared')
+        .length;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Back button + vehicle name + month selector
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back, color: Color(0xFF1A237E)),
+                onPressed: () => setState(() => _selectedVehicle = null),
+              ),
+              Expanded(
+                child: Text(
+                  vehicleNumber,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1A237E),
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime(2024),
+                    lastDate: DateTime(2030),
+                  );
+                  if (picked != null) {
+                    setState(
+                      () => _filterMonth = DateFormat('yyyy-MM').format(picked),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.date_range, size: 16),
+                label: Text(_filterMonth, style: const TextStyle(fontSize: 13)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // Stats + Monthly PDF
+          Row(
+            children: [
+              _statCard('Draft', '$draftCount', Colors.grey),
+              const SizedBox(width: 8),
+              _statCard('Submitted', '$submittedCount', Colors.orange),
+              const SizedBox(width: 8),
+              _statCard('Cleared', '$clearedCount', Colors.green),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _generatingMonthlyPdf
+                    ? Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Colors.blue.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: const Center(
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFF1A237E),
+                            ),
+                          ),
+                        ),
+                      )
+                    : InkWell(
+                        onTap: () =>
+                            _generateVehicleMonthlyPdf(vehicleNumber, logs),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFF1A237E,
+                            ).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: const Color(
+                                0xFF1A237E,
+                              ).withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              const Icon(
+                                Icons.picture_as_pdf,
+                                size: 18,
+                                color: Color(0xFF1A237E),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Monthly PDF',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey[700],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (logs.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.book_outlined, size: 40, color: Colors.grey[400]),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No logbook entries for $_filterMonth',
+                    style: TextStyle(color: Colors.grey[500]),
+                  ),
+                ],
+              ),
+            )
+          else
+            ...logs.map((l) => _buildLogCard(l)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _generateVehicleMonthlyPdf(
+    String vehicleNumber,
+    List<Map<String, dynamic>> logs,
+  ) async {
+    setState(() => _generatingMonthlyPdf = true);
+    try {
+      if (logs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No entries for this month'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+      final pdfBytes = await GovernmentPdfService.generateMonthlyLogbookPdf(
+        vehicleNumber: vehicleNumber,
+        month: _filterMonth,
+        logEntries: logs,
+        agencyName: 'Priyanshi Travel Agency',
+      );
+      final safeVehicle = vehicleNumber.replaceAll(' ', '_');
+      final fileName = '${safeVehicle}_monthly_$_filterMonth.pdf';
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/$fileName');
+      await file.writeAsBytes(pdfBytes);
+      await Share.shareXFiles([
+        XFile(file.path),
+      ], text: 'Monthly Logbook - $vehicleNumber - $_filterMonth');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _generatingMonthlyPdf = false);
+    }
   }
 
   Widget _buildLogCard(Map<String, dynamic> l) {

@@ -188,6 +188,7 @@ class _DriverLogbookScreenState extends State<DriverLogbookScreen> {
           ),
         );
         _clearForm();
+        _autoFillVehicle();
       }
     } catch (e) {
       if (mounted) {

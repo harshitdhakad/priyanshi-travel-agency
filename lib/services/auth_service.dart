@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 
 class AuthService extends ChangeNotifier {
@@ -54,6 +56,61 @@ class AuthService extends ChangeNotifier {
   List<AppUser> get staffMembers =>
       _users.where((u) => u.role == UserRole.staff).toList();
 
+  // Save session to SharedPreferences
+  Future<void> _saveSession() async {
+    if (_currentUser == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final data = {
+      'id': _currentUser!.id,
+      'username': _currentUser!.username,
+      'password': _currentUser!.password,
+      'role': _currentUser!.role.name,
+      'name': _currentUser!.name,
+      'phone': _currentUser!.phone,
+      'email': _currentUser!.email,
+      'address': _currentUser!.address,
+      'licenseNumber': _currentUser!.licenseNumber,
+      'vehicleAssigned': _currentUser!.vehicleAssigned,
+      'salary': _currentUser!.salary,
+    };
+    await prefs.setString('saved_session', jsonEncode(data));
+  }
+
+  // Clear saved session
+  Future<void> clearSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('saved_session');
+  }
+
+  // Restore session from SharedPreferences
+  Future<bool> restoreSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('saved_session');
+    if (raw == null) return false;
+    try {
+      final data = Map<String, dynamic>.from(jsonDecode(raw));
+      _currentUser = AppUser(
+        id: data['id'] ?? '',
+        username: data['username'] ?? '',
+        password: data['password'] ?? '',
+        role: UserRole.values.firstWhere((r) => r.name == data['role']),
+        name: data['name'] ?? '',
+        phone: data['phone'],
+        email: data['email'],
+        address: data['address'],
+        licenseNumber: data['licenseNumber'],
+        vehicleAssigned: data['vehicleAssigned'],
+        salary: data['salary'] != null
+            ? (data['salary'] as num).toDouble()
+            : null,
+      );
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // Login
   String? login(String username, String password, UserRole selectedRole) {
     try {
@@ -64,6 +121,7 @@ class AuthService extends ChangeNotifier {
             u.role == selectedRole,
       );
       _currentUser = user;
+      _saveSession();
       notifyListeners();
       return null; // no error
     } catch (_) {
@@ -88,6 +146,7 @@ class AuthService extends ChangeNotifier {
           ? (profile['salary'] as num).toDouble()
           : null,
     );
+    _saveSession();
     notifyListeners();
   }
 
@@ -143,6 +202,7 @@ class AuthService extends ChangeNotifier {
 
   void logout() {
     _currentUser = null;
+    clearSession();
     notifyListeners();
   }
 }

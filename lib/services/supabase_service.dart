@@ -876,7 +876,9 @@ ALTER TABLE vehicle_holidays DISABLE ROW LEVEL SECURITY;
       query = query.eq('driver_id', driverId);
     }
     if (month != null && month.isNotEmpty) {
-      query = query.like('log_date', '$month%');
+      final firstDay = '$month-01';
+      final lastDay = '$month-31';
+      query = query.gte('log_date', firstDay).lte('log_date', lastDay);
     }
     final data = await query.order('log_date', ascending: false);
     return List<Map<String, dynamic>>.from(data);
@@ -887,11 +889,14 @@ ALTER TABLE vehicle_holidays DISABLE ROW LEVEL SECURITY;
     required String vehicleNumber,
     required String month, // yyyy-MM
   }) async {
+    final firstDay = '$month-01';
+    final lastDay = '$month-31';
     final data = await client
         .from('fleet_logbooks')
         .select()
         .eq('vehicle_number', vehicleNumber)
-        .like('log_date', '$month%')
+        .gte('log_date', firstDay)
+        .lte('log_date', lastDay)
         .order('log_date', ascending: true);
     return List<Map<String, dynamic>>.from(data);
   }

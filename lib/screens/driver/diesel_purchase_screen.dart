@@ -232,6 +232,46 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
       child: StreamBuilder<List<Map<String, dynamic>>>(
         stream: widget.supabaseService.dieselPurchasesStream(),
         builder: (context, snap) {
+          if (snap.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: Colors.red,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Error loading diesel purchases',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      snap.error.toString(),
+                      style: const TextStyle(fontSize: 12, color: Colors.red),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'If this is about odometer_reading column, run in Supabase SQL Editor:\nALTER TABLE diesel_purchases ADD COLUMN IF NOT EXISTS odometer_reading NUMERIC DEFAULT 0;',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.orange,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
           var purchases = snap.data ?? [];
           if (widget.driverId != null) {
             purchases = purchases
