@@ -25,6 +25,7 @@ class _DriverLogbookScreenState extends State<DriverLogbookScreen> {
   final tollCtrl = TextEditingController();
   final startKmCtrl = TextEditingController();
   final endKmCtrl = TextEditingController();
+  final officerCtrl = TextEditingController();
   final dateCtrl = TextEditingController(
     text: DateFormat('yyyy-MM-dd').format(DateTime.now()),
   );
@@ -43,11 +44,25 @@ class _DriverLogbookScreenState extends State<DriverLogbookScreen> {
   Future<void> _autoFillVehicle() async {
     if (widget.driverId == null) return;
     try {
+      // First try: vehicle with assigned_driver_id
       final vehicles = await widget.supabaseService.getVehicles();
       if (!mounted) return;
-      final match = vehicles.where(
+      var match = vehicles.where(
         (v) => v['assigned_driver_id'] == widget.driverId,
       );
+      // Second try: vehicle assigned via office_vehicle_assignments
+      if (match.isEmpty) {
+        final assignments = await widget.supabaseService
+            .getOfficeVehicleAssignments();
+        if (!mounted) return;
+        final driverAssignments = assignments.where(
+          (a) => a['driver_id'] == widget.driverId,
+        );
+        if (driverAssignments.isNotEmpty) {
+          final vehicleId = driverAssignments.first['vehicle_id'];
+          match = vehicles.where((v) => v['id'] == vehicleId);
+        }
+      }
       if (match.isNotEmpty && vehicleCtrl.text.isEmpty) {
         vehicleCtrl.text = match.first['number_plate']?.toString() ?? '';
       }
@@ -105,6 +120,10 @@ class _DriverLogbookScreenState extends State<DriverLogbookScreen> {
     setState(() => _saving = true);
     try {
       final metadata = <String, dynamic>{};
+      // Add officer name to metadata
+      if (officerCtrl.text.trim().isNotEmpty) {
+        metadata['officer'] = officerCtrl.text.trim();
+      }
       for (final field in _dynamicFields) {
         final key = field['key']!.text.trim();
         final val = field['value']!.text.trim();
@@ -220,6 +239,7 @@ class _DriverLogbookScreenState extends State<DriverLogbookScreen> {
     tollCtrl.clear();
     startKmCtrl.clear();
     endKmCtrl.clear();
+    officerCtrl.clear();
     for (final c in _cityStops) {
       c.dispose();
     }
@@ -338,6 +358,16 @@ class _DriverLogbookScreenState extends State<DriverLogbookScreen> {
                               ],
                             ),
                             const SizedBox(height: 12),
+                            TextFormField(
+                              controller: officerCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Officer / Government Official',
+                                hintText: 'Name of officer visited',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.person_outline),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
                             // Day-level KM fields
                             Container(
                               padding: const EdgeInsets.all(12),
@@ -429,13 +459,47 @@ class _DriverLogbookScreenState extends State<DriverLogbookScreen> {
                             color: AppTheme.primary,
                           ),
                         ),
-                        TextButton.icon(
-                          onPressed: _addCityStop,
-                          icon: const Icon(Icons.add_location, size: 16),
-                          label: const Text('Add City'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: AppTheme.primary,
-                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ActionChip(
+                              avatar: const Icon(Icons.location_city, size: 14),
+                              label: const Text('Local Vidisha'),
+                              onPressed: () {
+                                setState(() {
+                                  if (_cityStops.isEmpty) {
+                                    _cityStops.add(
+                                      TextEditingController(
+                                        text: 'Local (Vidisha)',
+                                      ),
+                                    );
+                                  } else {
+                                    _cityStops[0].text = 'Local (Vidisha)';
+                                  }
+                                });
+                              },
+                              backgroundColor: AppTheme.accent.withValues(
+                                alpha: 0.1,
+                              ),
+                              side: BorderSide(
+                                color: AppTheme.accent.withValues(alpha: 0.3),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            const SizedBox(width: 4),
+                            TextButton.icon(
+                              onPressed: _addCityStop,
+                              icon: const Icon(Icons.add_location, size: 16),
+                              label: const Text('Add City'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: AppTheme.primary,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),

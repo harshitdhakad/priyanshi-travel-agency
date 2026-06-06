@@ -133,7 +133,10 @@ class _DriverDashboardState extends State<DriverDashboard> {
       case 10:
         return const DriverAboutScreen();
       case 11:
-        return DriverMyDetailsScreen(authService: widget.authService);
+        return DriverMyDetailsScreen(
+          authService: widget.authService,
+          supabaseService: widget.supabaseService,
+        );
       case 12:
         return EventsScreen(
           supabaseService: widget.supabaseService,

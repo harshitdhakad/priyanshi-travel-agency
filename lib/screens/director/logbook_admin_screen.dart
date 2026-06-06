@@ -17,6 +17,79 @@ class LogbookAdminScreen extends StatefulWidget {
 class _LogbookAdminScreenState extends State<LogbookAdminScreen> {
   String _filterMonth = DateFormat('yyyy-MM').format(DateTime.now());
   String? _uploadingId;
+  bool _generatingMonthlyPdf = false;
+
+  Future<void> _generateMonthlyPdf() async {
+    setState(() => _generatingMonthlyPdf = true);
+    try {
+      // Get all logs for the selected month
+      final allLogs = await widget.supabaseService.getLogbooks(
+        month: _filterMonth,
+      );
+
+      if (allLogs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No logbook entries for this month'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Group by vehicle
+      final vehicleMap = <String, List<Map<String, dynamic>>>{};
+      for (final log in allLogs) {
+        final vNum = log['vehicle_number']?.toString() ?? 'UNKNOWN';
+        vehicleMap.putIfAbsent(vNum, () => []).add(log);
+      }
+
+      // Generate PDF for each vehicle
+      for (final entry in vehicleMap.entries) {
+        final vehicleNumber = entry.key;
+        final logs = entry.value;
+
+        final pdfBytes = await GovernmentPdfService.generateMonthlyLogbookPdf(
+          vehicleNumber: vehicleNumber,
+          month: _filterMonth,
+          logEntries: logs,
+          agencyName: 'Priyanshi Travel Agency',
+        );
+
+        final safeVehicle = vehicleNumber.replaceAll(' ', '_');
+        final fileName =
+            '$safeVehicle'
+            '_monthly_$_filterMonth.pdf';
+
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/$fileName');
+        await file.writeAsBytes(pdfBytes);
+
+        await Share.shareXFiles([
+          XFile(file.path),
+        ], text: 'Monthly Logbook - $vehicleNumber - $_filterMonth');
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Generated ${vehicleMap.length} monthly PDF(s)'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _generatingMonthlyPdf = false);
+    }
+  }
 
   Future<void> _generateAndUploadOfficialPdf(Map<String, dynamic> log) async {
     final logId = log['id']?.toString() ?? '';
@@ -311,6 +384,66 @@ class _LogbookAdminScreenState extends State<LogbookAdminScreen> {
                     _statCard('Submitted', '$submittedCount', Colors.orange),
                     const SizedBox(width: 8),
                     _statCard('Cleared', '$clearedCount', Colors.green),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _generatingMonthlyPdf
+                          ? Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: Colors.blue.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: const Center(
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFF1A237E),
+                                  ),
+                                ),
+                              ),
+                            )
+                          : InkWell(
+                              onTap: _generateMonthlyPdf,
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(
+                                    0xFF1A237E,
+                                  ).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: const Color(
+                                      0xFF1A237E,
+                                    ).withValues(alpha: 0.3),
+                                  ),
+                                ),
+                                child: Column(
+                                  children: [
+                                    const Icon(
+                                      Icons.picture_as_pdf,
+                                      size: 18,
+                                      color: Color(0xFF1A237E),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Monthly PDF',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.grey[700],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),

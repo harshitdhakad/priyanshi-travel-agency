@@ -328,7 +328,8 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                   }
                   return Column(
                     children: bookings.take(5).map((b) {
-                      final status = b['status']?.toString() ?? 'pending';
+                      final status =
+                          b['payment_status']?.toString() ?? 'pending';
                       return Card(
                         margin: const EdgeInsets.only(bottom: 8),
                         shape: RoundedRectangleBorder(
@@ -355,7 +356,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                             ),
                           ),
                           subtitle: Text(
-                            '${b['pickup_location'] ?? ''} → ${b['drop_location'] ?? ''}\n${b['booking_date'] ?? ''}',
+                            '${b['destination'] ?? 'No destination'}\n${b['trip_date'] ?? ''}',
                             style: const TextStyle(fontSize: 11),
                           ),
                           trailing: Container(
@@ -364,10 +365,8 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: status == 'confirmed'
+                              color: status == 'paid'
                                   ? AppTheme.success
-                                  : status == 'completed'
-                                  ? AppTheme.primary
                                   : AppTheme.warning,
                               borderRadius: BorderRadius.circular(6),
                             ),

@@ -207,67 +207,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             const SizedBox(height: 24),
                           ],
 
-                          // Self marking for drivers
-                          if (widget.isDriverView &&
-                              widget.currentDriverId != null) ...[
-                            Text(
-                              _loc.t('mark_my_attendance'),
-                              style: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.primary,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Builder(
-                              builder: (context) {
-                                final myAtts = allAttendance
-                                    .where(
-                                      (a) =>
-                                          a['driver_id'] ==
-                                              widget.currentDriverId &&
-                                          a['date'] ==
-                                              DateFormat(
-                                                'yyyy-MM-dd',
-                                              ).format(_selectedDate),
-                                    )
-                                    .toList();
-                                final currentStatus = myAtts.isNotEmpty
-                                    ? myAtts.first['status']
-                                    : null;
-                                return Card(
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceAround,
-                                      children: [
-                                        _attButtonLarge(
-                                          widget.currentDriverId!,
-                                          'present',
-                                          'Present',
-                                          Colors.green,
-                                          currentStatus == 'present',
-                                        ),
-                                        _attButtonLarge(
-                                          widget.currentDriverId!,
-                                          'absent',
-                                          'Absent',
-                                          Colors.red,
-                                          currentStatus == 'absent',
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 24),
-                          ],
-
                           // Attendance pie chart
                           Text(
                             _loc.t('attendance_overview'),
@@ -322,32 +261,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             color: isSelected ? Colors.white : color,
             fontWeight: FontWeight.bold,
             fontSize: 13,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _attButtonLarge(
-    String driverId,
-    String status,
-    String label,
-    Color color,
-    bool isSelected,
-  ) {
-    return GestureDetector(
-      onTap: () => _markAttendance(driverId, status),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        decoration: BoxDecoration(
-          color: isSelected ? color : color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : color,
-            fontWeight: FontWeight.bold,
           ),
         ),
       ),

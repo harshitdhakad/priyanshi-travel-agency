@@ -20,6 +20,27 @@ class DriverBookingScreen extends StatefulWidget {
 }
 
 class _DriverBookingScreenState extends State<DriverBookingScreen> {
+  List<Map<String, dynamic>> _driverVehicleIds = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDriverVehicles();
+  }
+
+  Future<void> _loadDriverVehicles() async {
+    if (widget.driverId == null) return;
+    try {
+      final vehicles = await widget.supabaseService.getVehicles();
+      if (!mounted) return;
+      setState(() {
+        _driverVehicleIds = vehicles
+            .where((v) => v['assigned_driver_id'] == widget.driverId)
+            .toList();
+      });
+    } catch (_) {}
+  }
+
   void _showFillDetails(Map<String, dynamic> trip) {
     final destCtrl = TextEditingController(text: trip['destination'] ?? '');
     final amtCtrl = TextEditingController(
@@ -160,8 +181,15 @@ class _DriverBookingScreenState extends State<DriverBookingScreen> {
         builder: (context, snap) {
           var trips = snap.data ?? [];
           if (widget.driverId != null) {
+            final vIds = _driverVehicleIds
+                .map((v) => v['id'] as String)
+                .toSet();
             trips = trips
-                .where((t) => t['driver_id'] == widget.driverId)
+                .where(
+                  (t) =>
+                      t['driver_id'] == widget.driverId ||
+                      vIds.contains(t['vehicle_id']),
+                )
                 .toList();
           }
           return SingleChildScrollView(

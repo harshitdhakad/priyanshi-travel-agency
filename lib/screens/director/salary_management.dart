@@ -401,8 +401,7 @@ class _SalaryManagementScreenState extends State<SalaryManagementScreen> {
                             color: Colors.grey[700],
                           ),
                         ),
-                        if (!widget.isDriverView ||
-                            widget.currentDriverId == driverId)
+                        if (!widget.isDriverView)
                           TextButton.icon(
                             onPressed: () => _showAdvanceDialog(
                               driverId: driverId,

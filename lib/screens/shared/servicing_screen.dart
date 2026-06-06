@@ -273,9 +273,9 @@ class _ServicingScreenState extends State<ServicingScreen> {
                         ),
                         subtitle: Text(
                           'Last service: $lastDate${daysAgo != null ? ' ($daysAgo days ago)' : ''}',
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 11,
+                          style: const TextStyle(
+                            color: Color(0xFF475569),
+                            fontSize: 12,
                           ),
                         ),
                         children: entry.value.map((r) {
@@ -334,8 +334,8 @@ class _ServicingScreenState extends State<ServicingScreen> {
                                     r['description'].toString().isNotEmpty)
                                   Text(
                                     r['description'],
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
+                                    style: const TextStyle(
+                                      color: Color(0xFF334155),
                                       fontSize: 12,
                                     ),
                                   ),

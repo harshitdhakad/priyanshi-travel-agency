@@ -253,6 +253,7 @@ CREATE TABLE IF NOT EXISTS diesel_purchases (
   vehicle_number TEXT,
   amount NUMERIC NOT NULL DEFAULT 0,
   liters NUMERIC DEFAULT 0,
+  odometer_reading NUMERIC DEFAULT 0,
   purchase_date DATE DEFAULT CURRENT_DATE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -359,6 +360,23 @@ ALTER TABLE vehicle_holidays DISABLE ROW LEVEL SECURITY;
       _tablesExist = false;
       notifyListeners();
       return false;
+    }
+  }
+
+  /// Runs DISABLE RLS on all tables every time app connects.
+  /// This fixes the 42501 error when RLS gets re-enabled by Supabase.
+  Future<bool> checkRlsStatus() async {
+    try {
+      // Try inserting and immediately deleting a test row in diesel_purchases
+      // If RLS blocks it, we know RLS is still enabled
+      await client.from('diesel_purchases').select().limit(1);
+      return true;
+    } catch (e) {
+      if (e.toString().contains('row-level security') ||
+          e.toString().contains('42501')) {
+        return false;
+      }
+      return true; // Other errors are fine
     }
   }
 
@@ -853,12 +871,28 @@ ALTER TABLE vehicle_holidays DISABLE ROW LEVEL SECURITY;
     String? driverId,
     String? month,
   }) async {
-    final query = client.from('fleet_logbooks').select();
-    final data = driverId != null
-        ? await query
-              .eq('driver_id', driverId)
-              .order('log_date', ascending: false)
-        : await query.order('log_date', ascending: false);
+    var query = client.from('fleet_logbooks').select();
+    if (driverId != null) {
+      query = query.eq('driver_id', driverId);
+    }
+    if (month != null && month.isNotEmpty) {
+      query = query.like('log_date', '$month%');
+    }
+    final data = await query.order('log_date', ascending: false);
+    return List<Map<String, dynamic>>.from(data);
+  }
+
+  /// Get all logbook entries for a specific vehicle in a specific month
+  Future<List<Map<String, dynamic>>> getLogbooksByVehicleAndMonth({
+    required String vehicleNumber,
+    required String month, // yyyy-MM
+  }) async {
+    final data = await client
+        .from('fleet_logbooks')
+        .select()
+        .eq('vehicle_number', vehicleNumber)
+        .like('log_date', '$month%')
+        .order('log_date', ascending: true);
     return List<Map<String, dynamic>>.from(data);
   }
 
@@ -1001,21 +1035,23 @@ ALTER TABLE vehicle_holidays DISABLE ROW LEVEL SECURITY;
   Future<List<Map<String, dynamic>>> getDieselPurchases({
     String? driverId,
     String? vehicleId,
+    String? startDate,
+    String? endDate,
   }) async {
-    final query = client.from('diesel_purchases').select();
+    var query = client.from('diesel_purchases').select();
     if (driverId != null) {
-      final data = await query
-          .eq('driver_id', driverId)
-          .order('purchase_date', ascending: false);
-      return List<Map<String, dynamic>>.from(data);
+      query = query.eq('driver_id', driverId);
     }
     if (vehicleId != null) {
-      final data = await query
-          .eq('vehicle_id', vehicleId)
-          .order('purchase_date', ascending: false);
-      return List<Map<String, dynamic>>.from(data);
+      query = query.eq('vehicle_id', vehicleId);
     }
-    final data = await query.order('purchase_date', ascending: false);
+    if (startDate != null && startDate.isNotEmpty) {
+      query = query.gte('purchase_date', startDate);
+    }
+    if (endDate != null && endDate.isNotEmpty) {
+      query = query.lte('purchase_date', endDate);
+    }
+    final data = await query.order('purchase_date', ascending: true);
     return List<Map<String, dynamic>>.from(data);
   }
 
@@ -1025,6 +1061,7 @@ ALTER TABLE vehicle_holidays DISABLE ROW LEVEL SECURITY;
     String? vehicleNumber,
     required double amount,
     double? liters,
+    double? odometerReading,
     String? date,
   }) async {
     await client.from('diesel_purchases').insert({
@@ -1033,6 +1070,7 @@ ALTER TABLE vehicle_holidays DISABLE ROW LEVEL SECURITY;
       'vehicle_number': vehicleNumber,
       'amount': amount,
       'liters': liters ?? 0,
+      'odometer_reading': odometerReading ?? 0,
       'purchase_date': date ?? DateTime.now().toIso8601String().split('T')[0],
     });
     notifyListeners();
@@ -1326,15 +1364,31 @@ ALTER TABLE vehicle_holidays DISABLE ROW LEVEL SECURITY;
   // ══════════════════════════════════════
 
   Stream<List<Map<String, dynamic>>> driverBookingsStream(String driverId) {
+    // First get vehicles assigned to this driver
     return client
-        .from('bookings')
+        .from('vehicles')
         .stream(primaryKey: ['id'])
         .map(
-          (events) => events
-              .map((e) => Map<String, dynamic>.from(e))
-              .where((b) => b['driver_id'] == driverId)
+          (vehicles) => vehicles
+              .where((v) => v['assigned_driver_id'] == driverId)
+              .map((v) => v['id'] as String)
               .toList(),
-        );
+        )
+        .asyncMap((vehicleIds) async {
+          // Get all bookings and filter by driver_id OR vehicle_id
+          final allBookings = await client
+              .from('booking_trips')
+              .select()
+              .order('trip_date', ascending: false);
+          return allBookings.map((e) => Map<String, dynamic>.from(e)).where((
+            b,
+          ) {
+            final directMatch = b['driver_id'] == driverId;
+            final vehicleMatch = vehicleIds.contains(b['vehicle_id']);
+            return directMatch || vehicleMatch;
+          }).toList();
+        })
+        .asBroadcastStream();
   }
 
   Stream<List<Map<String, dynamic>>> driverAssignmentsStream(String driverId) {

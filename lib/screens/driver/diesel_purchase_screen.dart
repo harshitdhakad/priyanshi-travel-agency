@@ -37,6 +37,7 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
       builder: (ctx) {
         final amtCtrl = TextEditingController();
         final litersCtrl = TextEditingController();
+        final odoCtrl = TextEditingController();
         final dateCtrl = TextEditingController(
           text: DateFormat('yyyy-MM-dd').format(DateTime.now()),
         );
@@ -91,6 +92,17 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Liters',
                       border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: odoCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Odometer Reading (KM)',
+                      hintText: 'Current odometer KM',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.speed, size: 18),
                     ),
                     keyboardType: TextInputType.number,
                   ),
@@ -156,6 +168,7 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
                             vehicleNumber: vehicle['number_plate'] as String?,
                             amount: double.tryParse(amtCtrl.text) ?? 0,
                             liters: double.tryParse(litersCtrl.text),
+                            odometerReading: double.tryParse(odoCtrl.text),
                             date: dateCtrl.text,
                           );
                           if (ctx.mounted) Navigator.pop(ctx);
@@ -170,10 +183,21 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
                         } catch (e) {
                           setS(() => saving = false);
                           if (mounted) {
+                            final errStr = e.toString();
+                            final isRls =
+                                errStr.contains('row-level security') ||
+                                errStr.contains('42501');
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Error saving: $e'),
-                                backgroundColor: AppTheme.error,
+                                content: Text(
+                                  isRls
+                                      ? 'RLS is blocking diesel_purchases. Go to Supabase SQL Editor and run: ALTER TABLE diesel_purchases DISABLE ROW LEVEL SECURITY;'
+                                      : 'Error saving: $errStr',
+                                ),
+                                backgroundColor: isRls
+                                    ? Colors.deepOrange
+                                    : AppTheme.error,
+                                duration: Duration(seconds: isRls ? 8 : 4),
                               ),
                             );
                           }
@@ -316,46 +340,118 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
                     ),
                   )
                 else
-                  ...purchases.map(
-                    (p) => Card(
+                  ...List<Map<String, dynamic>>.from(
+                    purchases,
+                  ).reversed.toList().asMap().entries.map((entry) {
+                    final idx = entry.key;
+                    final p = entry.value;
+                    // Find previous purchase for same vehicle to calc mileage
+                    String? mileageStr;
+                    final prevPurchases = purchases
+                        .where(
+                          (x) =>
+                              x['vehicle_id'] == p['vehicle_id'] &&
+                              (x['purchase_date'] ?? '') <
+                                  (p['purchase_date'] ?? ''),
+                        )
+                        .toList();
+                    if (prevPurchases.isNotEmpty) {
+                      final prev = prevPurchases.last;
+                      final prevOdo =
+                          double.tryParse(
+                            prev['odometer_reading']?.toString() ?? '0',
+                          ) ??
+                          0;
+                      final currOdo =
+                          double.tryParse(
+                            p['odometer_reading']?.toString() ?? '0',
+                          ) ??
+                          0;
+                      final prevLiters =
+                          double.tryParse(prev['liters']?.toString() ?? '0') ??
+                          0;
+                      final kmTravelled = currOdo - prevOdo;
+                      if (prevLiters > 0 && kmTravelled > 0) {
+                        final mileage = kmTravelled / prevLiters;
+                        mileageStr =
+                            '${kmTravelled.toStringAsFixed(0)} KM / ${prevLiters.toStringAsFixed(1)}L = ${mileage.toStringAsFixed(1)} KM/L';
+                      }
+                    }
+                    return Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(12),
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppTheme.warning.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.local_gas_station,
-                            color: AppTheme.warning,
-                            size: 18,
-                          ),
-                        ),
-                        title: Text(
-                          p['vehicle_number'] ?? 'Unknown',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                        subtitle: Text(
-                          '${p['purchase_date']} | ${p['liters'] ?? 0}L',
-                        ),
-                        trailing: Text(
-                          '₹${p['amount']}',
-                          style: const TextStyle(
-                            color: AppTheme.primary,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppTheme.warning.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.local_gas_station,
+                                color: AppTheme.warning,
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    p['vehicle_number'] ?? 'Unknown',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${p['purchase_date']} | ${p['liters'] ?? 0}L | Odo: ${p['odometer_reading'] ?? 0} KM',
+                                    style: const TextStyle(fontSize: 11),
+                                  ),
+                                  if (mileageStr != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.speed,
+                                            size: 12,
+                                            color: AppTheme.success,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            mileageStr,
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: AppTheme.success,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              '₹${p['amount']}',
+                              style: const TextStyle(
+                                color: AppTheme.primary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  }),
               ],
             ),
           );
