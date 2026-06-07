@@ -320,6 +320,9 @@ ALTER PUBLICATION supabase_realtime ADD TABLE vehicle_holidays;
 ALTER TABLE fleet_logbooks ADD COLUMN IF NOT EXISTS route_stops JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE fleet_logbooks ADD COLUMN IF NOT EXISTS not_went_anywhere BOOLEAN DEFAULT FALSE;
 
+-- Add odometer_reading column to diesel_purchases if missing
+ALTER TABLE diesel_purchases ADD COLUMN IF NOT EXISTS odometer_reading NUMERIC DEFAULT 0;
+
 -- Disable RLS on all tables so the app can access them
 ALTER TABLE profiles DISABLE ROW LEVEL SECURITY;
 ALTER TABLE vehicles DISABLE ROW LEVEL SECURITY;
@@ -1031,10 +1034,13 @@ ALTER TABLE vehicle_holidays DISABLE ROW LEVEL SECURITY;
   // ══════════════════════════════════════
 
   Stream<List<Map<String, dynamic>>> dieselPurchasesStream() {
-    return client
-        .from('diesel_purchases')
-        .stream(primaryKey: ['id'])
-        .map((e) => e.map((x) => Map<String, dynamic>.from(x)).toList());
+    return client.from('diesel_purchases').stream(primaryKey: ['id']).map((e) {
+      try {
+        return e.map((x) => Map<String, dynamic>.from(x)).toList();
+      } catch (_) {
+        return <Map<String, dynamic>>[];
+      }
+    });
   }
 
   Future<List<Map<String, dynamic>>> getDieselPurchases({

@@ -738,13 +738,44 @@ class _LogbookAdminScreenState extends State<LogbookAdminScreen> {
               ],
             ),
             const SizedBox(height: 6),
-            Text(
-              '${l['source'] ?? ''} → ${l['destination'] ?? ''}',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1A237E),
-              ),
+            Builder(
+              builder: (_) {
+                // Build full route display
+                final routeStops = l['route_stops'];
+                String routeStr;
+                if (routeStops is List && routeStops.isNotEmpty) {
+                  final cities = routeStops
+                      .map(
+                        (s) => s is Map
+                            ? s['destination']?.toString() ?? ''
+                            : s.toString(),
+                      )
+                      .where((s) => s.isNotEmpty)
+                      .toList();
+                  routeStr = cities.isNotEmpty
+                      ? cities.join(' \u2192 ')
+                      : '${l['source'] ?? ''} \u2192 ${l['destination'] ?? ''}';
+                } else {
+                  final dest = l['destination']?.toString() ?? '';
+                  if (dest.contains(' - ')) {
+                    routeStr = dest
+                        .split(' - ')
+                        .map((s) => s.trim())
+                        .where((s) => s.isNotEmpty)
+                        .join(' \u2192 ');
+                  } else {
+                    routeStr = '${l['source'] ?? ''} \u2192 $dest';
+                  }
+                }
+                return Text(
+                  routeStr,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1A237E),
+                  ),
+                );
+              },
             ),
             Row(
               children: [

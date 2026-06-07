@@ -232,6 +232,15 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
       child: StreamBuilder<List<Map<String, dynamic>>>(
         stream: widget.supabaseService.dieselPurchasesStream(),
         builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting &&
+              !snap.hasData) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: CircularProgressIndicator(color: AppTheme.primary),
+              ),
+            );
+          }
           if (snap.hasError) {
             return Center(
               child: Padding(

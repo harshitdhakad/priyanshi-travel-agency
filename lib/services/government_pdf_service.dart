@@ -20,7 +20,8 @@ class GovernmentPdfService {
     final endKm = (logbook['end_odometer'] ?? 0).toString();
     final totalKm = (logbook['total_km'] ?? 0).toString();
     final source = logbook['source'] ?? 'N/A';
-    final destination = logbook['destination'] ?? 'N/A';
+    // Build full route from route_stops or destination field
+    final fullRoute = _buildRouteString(logbook);
     final fuel = (logbook['fuel'] ?? 0).toString();
     final toll = (logbook['toll'] ?? 0).toString();
     final billStatus = logbook['bill_status'] ?? 'draft';
@@ -214,7 +215,7 @@ class GovernmentPdfService {
                       ),
                       children: [
                         _headerCell('Source'),
-                        _headerCell('Destination'),
+                        _headerCell('Full Route'),
                         _headerCell('Start KM'),
                         _headerCell('End KM'),
                         _headerCell('Total KM'),
@@ -223,7 +224,7 @@ class GovernmentPdfService {
                     pw.TableRow(
                       children: [
                         _cell(source),
-                        _cell(destination),
+                        _cell(fullRoute),
                         _cell(startKm),
                         _cell(endKm),
                         _cell(totalKm, bold: true),
@@ -796,7 +797,14 @@ class GovernmentPdfService {
     final dest = entry['destination']?.toString() ?? '';
     final src = entry['source']?.toString() ?? '';
     // If destination contains ' - ' it's a multi-stop route like "Vidisha - Bhopal - Vidisha"
-    if (dest.contains(' - ')) return dest;
+    if (dest.contains(' - ')) {
+      final stops = dest
+          .split(' - ')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      return stops.join(' \u2192 ');
+    }
     if (src.isNotEmpty && dest.isNotEmpty) return '$src \u2192 $dest';
     if (dest.isNotEmpty) return dest;
     if (entry['not_went_anywhere'] == true) return 'Station (No trip)';
