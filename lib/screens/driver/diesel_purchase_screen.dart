@@ -17,6 +17,40 @@ class DieselPurchaseScreen extends StatefulWidget {
 }
 
 class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
+  List<Map<String, dynamic>> _purchases = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final data = await widget.supabaseService.getDieselPurchases(
+        driverId: widget.driverId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _purchases = data;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
   void _showAddDiesel() async {
     final vehicles = await widget.supabaseService.getVehicles();
     if (!mounted) return;
@@ -172,6 +206,8 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
                             date: dateCtrl.text,
                           );
                           if (ctx.mounted) Navigator.pop(ctx);
+                          // Reload data after adding
+                          await _loadData();
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
@@ -229,20 +265,12 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
   Widget build(BuildContext context) {
     return Container(
       color: AppTheme.background,
-      child: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: widget.supabaseService.dieselPurchasesStream(),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting &&
-              !snap.hasData) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: CircularProgressIndicator(color: AppTheme.primary),
-              ),
-            );
-          }
-          if (snap.hasError) {
-            return Center(
+      child: _loading
+          ? const Center(
+              child: CircularProgressIndicator(color: AppTheme.primary),
+            )
+          : _error != null
+          ? Center(
               child: Padding(
                 padding: const EdgeInsets.all(32),
                 child: Column(
@@ -263,248 +291,260 @@ class _DieselPurchaseScreenState extends State<DieselPurchaseScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      snap.error.toString(),
+                      _error!,
                       style: const TextStyle(fontSize: 12, color: Colors.red),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'If this is about odometer_reading column, run in Supabase SQL Editor:\nALTER TABLE diesel_purchases ADD COLUMN IF NOT EXISTS odometer_reading NUMERIC DEFAULT 0;',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.orange,
-                      ),
-                      textAlign: TextAlign.center,
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: _loadData,
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text('Retry'),
                     ),
                   ],
                 ),
               ),
-            );
-          }
-          var purchases = snap.data ?? [];
-          if (widget.driverId != null) {
-            purchases = purchases
-                .where((p) => p['driver_id'] == widget.driverId)
-                .toList();
-          }
-          // Check for 3-day gap notification
-          String? warningMsg;
-          if (purchases.isNotEmpty) {
-            try {
-              final lastDate = DateTime.parse(
-                purchases.first['purchase_date'] ?? '',
-              );
-              final daysSince = DateTime.now().difference(lastDate).inDays;
-              if (daysSince >= 3) {
-                warningMsg = 'No diesel purchase in last $daysSince days!';
-              }
-            } catch (_) {}
-          } else {
-            warningMsg = 'No diesel purchases recorded yet!';
-          }
+            )
+          : _buildContent(),
+    );
+  }
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Diesel Purchases',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primary,
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: _showAddDiesel,
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Add'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                  ],
+  Widget _buildContent() {
+    var purchases = _purchases;
+    // Helper functions for safe date handling
+    String getDateStr(dynamic val) {
+      if (val == null) return '';
+      if (val is DateTime) return val.toIso8601String().split('T')[0];
+      return val.toString();
+    }
+
+    String getDisplayDate(dynamic val) {
+      if (val == null) return 'N/A';
+      if (val is DateTime) return DateFormat('yyyy-MM-dd').format(val);
+      return val.toString();
+    }
+
+    // Check for 3-day gap notification
+    String? warningMsg;
+    if (purchases.isNotEmpty) {
+      try {
+        final lastDateStr = getDateStr(purchases.first['purchase_date']);
+        if (lastDateStr.isNotEmpty) {
+          final lastDate = DateTime.parse(lastDateStr);
+          final daysSince = DateTime.now().difference(lastDate).inDays;
+          if (daysSince >= 3) {
+            warningMsg = 'No diesel purchase in last $daysSince days!';
+          }
+        }
+      } catch (_) {}
+    } else {
+      warningMsg = 'No diesel purchases recorded yet!';
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Diesel Purchases',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.primary,
                 ),
-                const SizedBox(height: 10),
-                if (warningMsg != null)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: AppTheme.warning.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppTheme.warning),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.warning_amber_rounded,
-                          color: AppTheme.warning,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            warningMsg,
-                            style: const TextStyle(
-                              color: AppTheme.warning,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+              ),
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: _loadData,
+                    icon: const Icon(Icons.refresh, size: 20),
+                    tooltip: 'Refresh',
                   ),
-                if (purchases.isEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(32),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppTheme.divider),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.local_gas_station_outlined,
-                          size: 40,
-                          color: AppTheme.textHint,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'No diesel purchases',
-                          style: TextStyle(color: AppTheme.textHint),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  ...List<Map<String, dynamic>>.from(
-                    purchases,
-                  ).reversed.toList().asMap().entries.map((entry) {
-                    final idx = entry.key;
-                    final p = entry.value;
-                    // Find previous purchase for same vehicle to calc mileage
-                    String? mileageStr;
-                    final prevPurchases = purchases
-                        .where(
-                          (x) =>
-                              x['vehicle_id'] == p['vehicle_id'] &&
-                              (x['purchase_date'] ?? '') <
-                                  (p['purchase_date'] ?? ''),
-                        )
-                        .toList();
-                    if (prevPurchases.isNotEmpty) {
-                      final prev = prevPurchases.last;
-                      final prevOdo =
-                          double.tryParse(
-                            prev['odometer_reading']?.toString() ?? '0',
-                          ) ??
-                          0;
-                      final currOdo =
-                          double.tryParse(
-                            p['odometer_reading']?.toString() ?? '0',
-                          ) ??
-                          0;
-                      final prevLiters =
-                          double.tryParse(prev['liters']?.toString() ?? '0') ??
-                          0;
-                      final kmTravelled = currOdo - prevOdo;
-                      if (prevLiters > 0 && kmTravelled > 0) {
-                        final mileage = kmTravelled / prevLiters;
-                        mileageStr =
-                            '${kmTravelled.toStringAsFixed(0)} KM / ${prevLiters.toStringAsFixed(1)}L = ${mileage.toStringAsFixed(1)} KM/L';
-                      }
-                    }
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
+                  ElevatedButton.icon(
+                    onPressed: _showAddDiesel,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Add'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primary,
+                      foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Row(
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (warningMsg != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: AppTheme.warning.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.warning),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    color: AppTheme.warning,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      warningMsg,
+                      style: const TextStyle(
+                        color: AppTheme.warning,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (purchases.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.divider),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.local_gas_station_outlined,
+                    size: 40,
+                    color: AppTheme.textHint,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No diesel purchases',
+                    style: TextStyle(color: AppTheme.textHint),
+                  ),
+                ],
+              ),
+            )
+          else
+            ...List<Map<String, dynamic>>.from(
+              purchases,
+            ).reversed.toList().asMap().entries.map((entry) {
+              final p = entry.value;
+              final pDateStr = getDateStr(p['purchase_date']);
+              // Find previous purchase for same vehicle to calc mileage
+              String? mileageStr;
+              final prevPurchases = purchases
+                  .where(
+                    (x) =>
+                        x['vehicle_id'] == p['vehicle_id'] &&
+                        getDateStr(x['purchase_date']).compareTo(pDateStr) < 0,
+                  )
+                  .toList();
+              if (prevPurchases.isNotEmpty) {
+                final prev = prevPurchases.last;
+                final prevOdo =
+                    double.tryParse(
+                      prev['odometer_reading']?.toString() ?? '0',
+                    ) ??
+                    0;
+                final currOdo =
+                    double.tryParse(p['odometer_reading']?.toString() ?? '0') ??
+                    0;
+                final prevLiters =
+                    double.tryParse(prev['liters']?.toString() ?? '0') ?? 0;
+                final kmTravelled = currOdo - prevOdo;
+                if (prevLiters > 0 && kmTravelled > 0) {
+                  final mileage = kmTravelled / prevLiters;
+                  mileageStr =
+                      '${kmTravelled.toStringAsFixed(0)} KM / ${prevLiters.toStringAsFixed(1)}L = ${mileage.toStringAsFixed(1)} KM/L';
+                }
+              }
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.warning.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.local_gas_station,
+                          color: AppTheme.warning,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: AppTheme.warning.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(
-                                Icons.local_gas_station,
-                                color: AppTheme.warning,
-                                size: 18,
+                            Text(
+                              p['vehicle_number'] ?? 'Unknown',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    p['vehicle_number'] ?? 'Unknown',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
+                            const SizedBox(height: 2),
+                            Text(
+                              '${getDisplayDate(p['purchase_date'])} | ${p['liters'] ?? 0}L | Odo: ${p['odometer_reading'] ?? 0} KM',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            if (mileageStr != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.speed,
+                                      size: 12,
+                                      color: AppTheme.success,
                                     ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '${p['purchase_date']} | ${p['liters'] ?? 0}L | Odo: ${p['odometer_reading'] ?? 0} KM',
-                                    style: const TextStyle(fontSize: 11),
-                                  ),
-                                  if (mileageStr != null)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 4),
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            Icons.speed,
-                                            size: 12,
-                                            color: AppTheme.success,
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            mileageStr,
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                              color: AppTheme.success,
-                                            ),
-                                          ),
-                                        ],
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      mileageStr,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppTheme.success,
                                       ),
                                     ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                            Text(
-                              '₹${p['amount']}',
-                              style: const TextStyle(
-                                color: AppTheme.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
                           ],
                         ),
                       ),
-                    );
-                  }),
-              ],
-            ),
-          );
-        },
+                      Text(
+                        '₹${p['amount']}',
+                        style: const TextStyle(
+                          color: AppTheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+        ],
       ),
     );
   }

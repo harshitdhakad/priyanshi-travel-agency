@@ -1075,15 +1075,28 @@ ALTER TABLE vehicle_holidays DISABLE ROW LEVEL SECURITY;
     double? odometerReading,
     String? date,
   }) async {
-    await client.from('diesel_purchases').insert({
+    final record = {
       'driver_id': driverId,
       'vehicle_id': vehicleId,
       'vehicle_number': vehicleNumber,
       'amount': amount,
       'liters': liters ?? 0,
-      'odometer_reading': odometerReading ?? 0,
       'purchase_date': date ?? DateTime.now().toIso8601String().split('T')[0],
-    });
+    };
+    // Try with odometer_reading first, fall back without it if column missing
+    try {
+      record['odometer_reading'] = odometerReading ?? 0;
+      await client.from('diesel_purchases').insert(record);
+    } catch (e) {
+      if (e.toString().contains('odometer_reading') ||
+          e.toString().contains('42703')) {
+        // Column doesn't exist, insert without it
+        record.remove('odometer_reading');
+        await client.from('diesel_purchases').insert(record);
+      } else {
+        rethrow;
+      }
+    }
     notifyListeners();
   }
 
