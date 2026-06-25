@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../services/supabase_service.dart';
+import '../../services/pdf_save_helper.dart';
 import 'package:intl/intl.dart';
 
 class DriverBookingScreen extends StatefulWidget {
@@ -164,12 +164,15 @@ class _DriverBookingScreenState extends State<DriverBookingScreen> {
       ),
     );
     final bytes = await pdf.save();
-    final dir = await getTemporaryDirectory();
-    final file = File(
-      '${dir.path}/booking_${trip['customer_name'] ?? 'trip'}.pdf',
+    final safeName = (trip['customer_name'] ?? 'trip').toString().replaceAll(
+      RegExp(r'[^a-zA-Z0-9._\- ]'),
+      '_',
     );
-    await file.writeAsBytes(bytes);
-    await Share.shareXFiles([XFile(file.path)], text: 'Booking Receipt');
+    await PdfSaveHelper.saveOrSharePdf(
+      context: context,
+      pdfBytes: bytes,
+      suggestedFileName: 'booking_$safeName.pdf',
+    );
   }
 
   @override

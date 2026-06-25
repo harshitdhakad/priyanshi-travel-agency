@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import '../../services/supabase_service.dart';
 import '../../services/government_pdf_service.dart';
+import '../../services/pdf_save_helper.dart';
 import 'package:intl/intl.dart';
 
 class ServicingScreen extends StatefulWidget {
@@ -380,18 +380,16 @@ class _ServicingScreenState extends State<ServicingScreen> {
                                           agencyName: 'Priyanshi Travel Agency',
                                           records: entry.value,
                                         );
-                                    final dir = await getTemporaryDirectory();
                                     final safeName = entry.key.replaceAll(
                                       RegExp(r'[^a-zA-Z0-9]'),
                                       '_',
                                     );
-                                    final file = File(
-                                      '${dir.path}/servicing_$safeName.pdf',
+                                    await PdfSaveHelper.saveOrSharePdf(
+                                      context: context,
+                                      pdfBytes: pdfBytes,
+                                      suggestedFileName:
+                                          'servicing_$safeName.pdf',
                                     );
-                                    await file.writeAsBytes(pdfBytes);
-                                    await Share.shareXFiles([
-                                      XFile(file.path),
-                                    ], text: 'Servicing Record - ${entry.key}');
                                   } catch (e) {
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(

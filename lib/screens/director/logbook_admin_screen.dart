@@ -1,9 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../services/supabase_service.dart';
 import '../../services/government_pdf_service.dart';
+import '../../services/pdf_save_helper.dart';
 import 'package:intl/intl.dart';
 
 class LogbookAdminScreen extends StatefulWidget {
@@ -62,26 +63,12 @@ class _LogbookAdminScreenState extends State<LogbookAdminScreen> {
         await widget.supabaseService.updateLogbookPdfUrl(logId, pdfUrl);
       }
 
-      // 5. Save locally and share
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/$fileName');
-      await file.writeAsBytes(pdfBytes);
-      await Share.shareXFiles([
-        XFile(file.path),
-      ], text: 'Official Logbook - $fileName');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              pdfUrl != null
-                  ? 'Official PDF saved to cloud & shared!'
-                  : 'PDF shared (cloud upload failed, saved locally)',
-            ),
-            backgroundColor: pdfUrl != null ? Colors.green : Colors.orange,
-          ),
-        );
-      }
+      // 5. Save locally and share/save
+      await PdfSaveHelper.saveOrSharePdf(
+        context: context,
+        pdfBytes: pdfBytes,
+        suggestedFileName: fileName,
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -604,12 +591,11 @@ class _LogbookAdminScreenState extends State<LogbookAdminScreen> {
       );
       final safeVehicle = vehicleNumber.replaceAll(' ', '_');
       final fileName = '${safeVehicle}_monthly_$_filterMonth.pdf';
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/$fileName');
-      await file.writeAsBytes(pdfBytes);
-      await Share.shareXFiles([
-        XFile(file.path),
-      ], text: 'Monthly Logbook - $vehicleNumber - $_filterMonth');
+      await PdfSaveHelper.saveOrSharePdf(
+        context: context,
+        pdfBytes: pdfBytes,
+        suggestedFileName: fileName,
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -844,9 +830,17 @@ class _LogbookAdminScreenState extends State<LogbookAdminScreen> {
                 if (hasPdfUrl)
                   TextButton.icon(
                     onPressed: () async {
-                      // Open the PDF URL
+                      // Copy PDF URL to clipboard
                       final url = l['pdf_report_url'].toString();
-                      await Share.share(url, subject: 'Official Logbook PDF');
+                      await Clipboard.setData(ClipboardData(text: url));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('PDF URL copied to clipboard'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
                     },
                     icon: const Icon(Icons.cloud_download, size: 14),
                     label: const Text(

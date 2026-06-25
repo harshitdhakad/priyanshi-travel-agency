@@ -2,9 +2,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import '../../services/supabase_service.dart';
 import '../../services/government_pdf_service.dart';
+import '../../services/pdf_save_helper.dart';
 import 'package:intl/intl.dart';
 
 class VehicleAnalysisScreen extends StatefulWidget {
@@ -21,6 +21,13 @@ class _VehicleAnalysisScreenState extends State<VehicleAnalysisScreen> {
   DateTime _mileageFrom = DateTime.now().subtract(const Duration(days: 30));
   DateTime _mileageTo = DateTime.now();
   bool _generatingMileagePdf = false;
+
+  /// Safely convert any date value (String, DateTime, null) to 'yyyy-MM-dd' string
+  static String _dateStr(dynamic val) {
+    if (val == null) return '';
+    if (val is DateTime) return DateFormat('yyyy-MM-dd').format(val);
+    return val.toString();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -135,7 +142,7 @@ class _VehicleAnalysisScreenState extends State<VehicleAnalysisScreen> {
           .where(
             (b) =>
                 b['vehicle_id'] == vId &&
-                (b['trip_date'] ?? '').startsWith(_selectedMonth),
+                _dateStr(b['trip_date']).startsWith(_selectedMonth),
           )
           .fold(
             0.0,
@@ -163,7 +170,7 @@ class _VehicleAnalysisScreenState extends State<VehicleAnalysisScreen> {
           .where(
             (s) =>
                 s['vehicle_id'] == vId &&
-                (s['servicing_date'] ?? '').startsWith(_selectedMonth),
+                _dateStr(s['servicing_date']).startsWith(_selectedMonth),
           )
           .fold(
             0.0,
@@ -174,7 +181,7 @@ class _VehicleAnalysisScreenState extends State<VehicleAnalysisScreen> {
           .where(
             (d) =>
                 d['vehicle_id'] == vId &&
-                (d['purchase_date'] ?? '').startsWith(_selectedMonth),
+                _dateStr(d['purchase_date']).startsWith(_selectedMonth),
           )
           .fold(
             0.0,
@@ -428,13 +435,15 @@ class _VehicleAnalysisScreenState extends State<VehicleAnalysisScreen> {
                                       .where(
                                         (d) =>
                                             d['vehicle_id'] == vId &&
-                                            (d['purchase_date'] ?? '')
-                                                .startsWith(_selectedMonth),
+                                            _dateStr(
+                                              d['purchase_date'],
+                                            ).startsWith(_selectedMonth),
                                       )
                                       .toList()
                                     ..sort(
-                                      (a, b) => (a['purchase_date'] ?? '')
-                                          .compareTo(b['purchase_date'] ?? ''),
+                                      (a, b) => _dateStr(
+                                        a['purchase_date'],
+                                      ).compareTo(_dateStr(b['purchase_date'])),
                                     );
                               String avgMileageStr = '-';
                               if (vDiesel.length >= 2) {
@@ -682,13 +691,14 @@ class _VehicleAnalysisScreenState extends State<VehicleAnalysisScreen> {
             .where(
               (d) =>
                   d['vehicle_id'] == vId &&
-                  (d['purchase_date'] ?? '') >= fromDate &&
-                  (d['purchase_date'] ?? '') <= toDate,
+                  _dateStr(d['purchase_date']).compareTo(fromDate) >= 0 &&
+                  _dateStr(d['purchase_date']).compareTo(toDate) <= 0,
             )
             .toList()
           ..sort(
-            (a, b) =>
-                (a['purchase_date'] ?? '').compareTo(b['purchase_date'] ?? ''),
+            (a, b) => _dateStr(
+              a['purchase_date'],
+            ).compareTo(_dateStr(b['purchase_date'])),
           );
 
     double totalLiters = 0;
@@ -806,8 +816,8 @@ class _VehicleAnalysisScreenState extends State<VehicleAnalysisScreen> {
           .where(
             (d) =>
                 d['vehicle_id'] == vId &&
-                (d['purchase_date'] ?? '') >= fromDate &&
-                (d['purchase_date'] ?? '') <= toDate,
+                _dateStr(d['purchase_date']).compareTo(fromDate) >= 0 &&
+                _dateStr(d['purchase_date']).compareTo(toDate) <= 0,
           )
           .toList();
 
@@ -832,17 +842,15 @@ class _VehicleAnalysisScreenState extends State<VehicleAnalysisScreen> {
         purchases: vDiesel,
       );
 
-      final dir = await getTemporaryDirectory();
       final safeName = (vehicle['number_plate'] ?? 'vehicle')
           .toString()
           .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
-      final file = File(
-        '${dir.path}/diesel_mileage_${safeName}_${fromDate}_to_${toDate}.pdf',
+      await PdfSaveHelper.saveOrSharePdf(
+        context: context,
+        pdfBytes: pdfBytes,
+        suggestedFileName:
+            'diesel_mileage_${safeName}_${fromDate}_to_${toDate}.pdf',
       );
-      await file.writeAsBytes(pdfBytes);
-      await Share.shareXFiles([
-        XFile(file.path),
-      ], text: 'Diesel Mileage Report');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
